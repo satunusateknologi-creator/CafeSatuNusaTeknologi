@@ -8,6 +8,8 @@ class CafeDb(context: Context) : SQLiteOpenHelper(context, "cafe.db", null, 4) {
  override fun onCreate(db: SQLiteDatabase) {
   db.execSQL("CREATE TABLE IF NOT EXISTS categories(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,active INTEGER DEFAULT 1)")
   db.execSQL("CREATE TABLE IF NOT EXISTS menu(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,price INTEGER,category TEXT,description TEXT DEFAULT '',active INTEGER DEFAULT 1)")
+  db.execSQL("CREATE TABLE IF NOT EXISTS menu_variants(id INTEGER PRIMARY KEY AUTOINCREMENT,menu_id INTEGER,name TEXT,price_delta INTEGER DEFAULT 0,active INTEGER DEFAULT 1)")
+  db.execSQL("CREATE TABLE IF NOT EXISTS modifiers(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,price INTEGER DEFAULT 0,active INTEGER DEFAULT 1)")
   db.execSQL("CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY AUTOINCREMENT,subtotal INTEGER,total INTEGER,payment TEXT,status TEXT,table_no TEXT,discount INTEGER DEFAULT 0,tax INTEGER DEFAULT 0,service INTEGER DEFAULT 0,notes TEXT DEFAULT '',created_at INTEGER)")
   db.execSQL("CREATE TABLE IF NOT EXISTS order_items(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER,menu_id INTEGER,menu_name TEXT,qty INTEGER,price INTEGER,note TEXT DEFAULT '')")
   db.execSQL("CREATE TABLE IF NOT EXISTS expenses(id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT,amount INTEGER,category TEXT DEFAULT 'Operasional',created_at INTEGER)")
@@ -16,6 +18,10 @@ class CafeDb(context: Context) : SQLiteOpenHelper(context, "cafe.db", null, 4) {
   db.execSQL("CREATE TABLE IF NOT EXISTS recipes(id INTEGER PRIMARY KEY AUTOINCREMENT,menu_id INTEGER,stock_id INTEGER,qty REAL)")
   db.execSQL("CREATE TABLE IF NOT EXISTS suppliers(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,phone TEXT,address TEXT)")
   db.execSQL("CREATE TABLE IF NOT EXISTS customers(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,phone TEXT,points INTEGER DEFAULT 0)")
+  db.execSQL("CREATE TABLE IF NOT EXISTS suppliers(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,phone TEXT,address TEXT,active INTEGER DEFAULT 1)")
+  db.execSQL("CREATE TABLE IF NOT EXISTS purchases(id INTEGER PRIMARY KEY AUTOINCREMENT,supplier_id INTEGER,total INTEGER,status TEXT,created_at INTEGER)")
+  db.execSQL("CREATE TABLE IF NOT EXISTS purchase_items(id INTEGER PRIMARY KEY AUTOINCREMENT,purchase_id INTEGER,stock_id INTEGER,qty REAL,unit_price INTEGER)")
+  db.execSQL("CREATE TABLE IF NOT EXISTS refunds(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER,amount INTEGER,reason TEXT,created_at INTEGER)")
   db.execSQL("CREATE TABLE IF NOT EXISTS employees(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,phone TEXT,role TEXT,active INTEGER DEFAULT 1)")
   db.execSQL("CREATE TABLE IF NOT EXISTS shifts(id INTEGER PRIMARY KEY AUTOINCREMENT,employee_id INTEGER,opening_cash INTEGER,closing_cash INTEGER DEFAULT 0,status TEXT,opened_at INTEGER,closed_at INTEGER)")
   db.execSQL("CREATE TABLE IF NOT EXISTS app_settings(key TEXT PRIMARY KEY,value TEXT)")
@@ -49,4 +55,8 @@ class CafeDb(context: Context) : SQLiteOpenHelper(context, "cafe.db", null, 4) {
  fun updateStatus(id:Long,status:String){writableDatabase.execSQL("UPDATE orders SET status=? WHERE id=?",arrayOf(status,id))}
  fun setting(key:String,defaultValue:String):String{readableDatabase.rawQuery("SELECT value FROM app_settings WHERE key=?",arrayOf(key)).use{if(it.moveToFirst())return it.getString(0)};return defaultValue}
  fun saveSetting(key:String,value:String){writableDatabase.execSQL("INSERT OR REPLACE INTO app_settings(key,value) VALUES(?,?)",arrayOf(key,value))}
+ fun addSupplier(name:String,phone:String,address:String){writableDatabase.execSQL("INSERT INTO suppliers(name,phone,address) VALUES(?,?,?)",arrayOf(name,phone,address))}
+ fun addModifier(name:String,price:Long){writableDatabase.execSQL("INSERT INTO modifiers(name,price,active) VALUES(?,?,1)",arrayOf(name,price))}
+ fun addVariant(menuId:Long,name:String,delta:Long){writableDatabase.execSQL("INSERT INTO menu_variants(menu_id,name,price_delta,active) VALUES(?,?,?,1)",arrayOf(menuId,name,delta))}
+ fun refund(orderId:Long,amount:Long,reason:String){writableDatabase.execSQL("INSERT INTO refunds(order_id,amount,reason,created_at) VALUES(?,?,?,?)",arrayOf(orderId,amount,reason,System.currentTimeMillis()));writableDatabase.execSQL("UPDATE orders SET status='REFUND' WHERE id=?",arrayOf(orderId))}
 }
