@@ -46,4 +46,7 @@ class CafeDb(context: Context) : SQLiteOpenHelper(context, "cafe.db", null, 4) {
   db.execSQL("INSERT OR IGNORE INTO app_settings(key,value) VALUES('tax_percent','0')")
   db.execSQL("INSERT OR IGNORE INTO app_settings(key,value) VALUES('service_percent','0')")
  }
+ fun updateStatus(id:Long,status:String){writableDatabase.execSQL("UPDATE orders SET status=? WHERE id=?",arrayOf(status,id))}
+ fun setting(key:String,defaultValue:String):String{readableDatabase.rawQuery("SELECT value FROM app_settings WHERE key=?",arrayOf(key)).use{if(it.moveToFirst())return it.getString(0)};return defaultValue}
+ fun saveSetting(key:String,value:String){writableDatabase.execSQL("INSERT OR REPLACE INTO app_settings(key,value) VALUES(?,?)",arrayOf(key,value))}
 }
