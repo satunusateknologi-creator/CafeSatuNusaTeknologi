@@ -116,7 +116,7 @@ class MainActivity:Activity(){
   if(session.role in listOf("OWNER","ADMIN"))r.addView(button("📊 LAPORAN & ANALITIK"){reports()})
   if(session.role in listOf("OWNER","ADMIN"))r.addView(button("🛠️ FITUR LANJUTAN"){advancedManager()})
   if(session.role in listOf("OWNER","ADMIN"))r.addView(button("⚙️ PENGATURAN"){settings()})
-  if(session.loggedIn)r.addView(button("🚪 Logout Server"){session.clear();home()})scroll(r)
+  if(session.loggedIn)r.addView(button("🚪 Logout Server"){session.clear();home()});scroll(r)
  }
  private fun pos(){
   val r=layout("🧾 Kasir / POS");r.addView(button("Meja: $table • Diskon: ${money(discount)}"){chooseTable()})
