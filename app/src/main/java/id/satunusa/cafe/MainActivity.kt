@@ -30,6 +30,7 @@ class MainActivity:Activity(){
  private var totalText:TextView?=null
  private var menuArea:LinearLayout?=null
  private var menuSearch:EditText?=null
+ private var cartBoxView:LinearLayout?=null
  private var selectedCategory:String?=null
  private val backupRequest=9101
  private val restoreRequest=9102
@@ -175,7 +176,7 @@ class MainActivity:Activity(){
   menuArea=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
   r.addView(menuArea)
   r.addView(section("Keranjang"))
-  val cartBox=LinearLayout(this);cartBox.orientation=LinearLayout.VERTICAL;cartBox.setPadding(dp(14),dp(12),dp(14),dp(12));cartBox.background=bg(Color.WHITE,18);cartText=tv("");cartBox.addView(cartText);r.addView(cartBox)
+  val cartBox=LinearLayout(this);cartBoxView=cartBox;cartBox.orientation=LinearLayout.VERTICAL;cartBox.setPadding(dp(14),dp(12),dp(14),dp(12));cartBox.background=bg(Color.WHITE,18);cartText=tv("");cartBox.addView(cartText);r.addView(cartBox)
   totalText=TextView(this);totalText!!.textSize=24f;totalText!!.typeface=Typeface.DEFAULT_BOLD;totalText!!.setTextColor(accent);totalText!!.gravity=Gravity.CENTER;r.addView(totalText);addGap(r,6)
   val pay=LinearLayout(this);pay.orientation=LinearLayout.HORIZONTAL;pay.addView(primaryButton("💵 Tunai"){pay("Tunai")},LinearLayout.LayoutParams(0,dp(56),1f));pay.addView(primaryButton("📱 QRIS"){pay("QRIS")},LinearLayout.LayoutParams(0,dp(56),1f));r.addView(pay);addGap(r,6)
   r.addView(button("🗑 Kosongkan Keranjang"){cart.clear();refreshCart()});addGap(r,4);r.addView(button("‹ Kembali"){home()});scroll(r);refreshCart()
@@ -201,7 +202,7 @@ class MainActivity:Activity(){
  }
  private fun refreshCart(){
   val sub=cart.values.sumOf{it.price*it.qty};val net=(sub-discount).coerceAtLeast(0);val tax=Math.round(net*taxPercent/100);val service=Math.round(net*servicePercent/100);val total=net+tax+service
-  val box=cartText?.parent as? LinearLayout ?: return
+  val box=cartBoxView ?: return
   box.removeAllViews()
   if(cart.isEmpty()){box.addView(tv("Keranjang kosong",14f))}else{
    cart.values.toList().forEach{item->
@@ -216,7 +217,6 @@ class MainActivity:Activity(){
    box.addView(tv("Subtotal: "+money(sub),13f))
    box.addView(tv("Diskon: "+money(discount)+" • Pajak: "+money(tax)+" • Service: "+money(service),12f))
   }
-  cartText=tv("")
   totalText?.text="TOTAL  "+money(total)
  }
  private fun pay(method:String){
