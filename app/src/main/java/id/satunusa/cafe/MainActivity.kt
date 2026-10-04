@@ -4,6 +4,8 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
@@ -30,11 +32,23 @@ class MainActivity:Activity(){
  private val restoreRequest=9102
  private lateinit var session:SessionManager
  private fun money(v:Long)="Rp "+String.format(Locale.US,"%,d",v).replace(',','.')
+ private val navy=Color.rgb(19,32,52)
+ private val accent=Color.rgb(15,118,110)
+ private val surface=Color.rgb(248,250,252)
+ private val ink=Color.rgb(15,23,42)
  private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
- private fun tv(s:String,size:Float=16f)=TextView(this).apply{text=s;textSize=size;setTextColor(Color.rgb(35,35,35));setPadding(dp(16),dp(10),dp(16),dp(10))}
- private fun button(s:String,fn:()->Unit)=Button(this).apply{text=s;setOnClickListener{fn()}}
- private fun layout(title:String):LinearLayout{val r=LinearLayout(this);r.orientation=LinearLayout.VERTICAL;r.setBackgroundColor(Color.rgb(248,249,250));val h=TextView(this).apply{text=title;textSize=22f;setTextColor(Color.WHITE);setGravity(Gravity.CENTER_VERTICAL);setPadding(dp(18),dp(18),dp(18),dp(18));setBackgroundColor(Color.rgb(24,28,35))};r.addView(h,LinearLayout.LayoutParams(-1,dp(64)));return r}
- private fun scroll(r:LinearLayout){setContentView(ScrollView(this).apply{addView(r)})}
+ private fun bg(color:Int,radius:Int=18)=GradientDrawable().apply{setColor(color);cornerRadius=dp(radius).toFloat()}
+ private fun tv(s:String,size:Float=16f)=TextView(this).apply{text=s;textSize=size;setTextColor(ink);setPadding(dp(4),dp(6),dp(4),dp(6))}
+ private fun button(s:String,fn:()->Unit)=Button(this).apply{text=s;textSize=14f;isAllCaps=false;setTextColor(navy);typeface=Typeface.DEFAULT_BOLD;background=bg(Color.WHITE,16);stateListAnimator=null;setPadding(dp(14),dp(10),dp(14),dp(10));setOnClickListener{fn()}}
+ private fun primaryButton(s:String,fn:()->Unit)=Button(this).apply{text=s;textSize=15f;isAllCaps=false;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD;background=bg(accent,16);stateListAnimator=null;setPadding(dp(14),dp(10),dp(14),dp(10));setOnClickListener{fn()}}
+ private fun layout(title:String):LinearLayout{
+  val r=LinearLayout(this);r.orientation=LinearLayout.VERTICAL;r.setBackgroundColor(surface);r.setPadding(dp(16),0,dp(16),dp(18))
+  val h=TextView(this);h.text=title;h.textSize=25f;h.setTextColor(navy);h.typeface=Typeface.DEFAULT_BOLD;h.setPadding(dp(4),dp(20),dp(4),dp(16));r.addView(h)
+  return r
+ }
+ private fun section(s:String)=TextView(this).apply{text=s;textSize=15f;setTextColor(navy);typeface=Typeface.DEFAULT_BOLD;setPadding(dp(4),dp(18),dp(4),dp(8))}
+ private fun addGap(r:LinearLayout,h:Int=8){r.addView(Space(this),LinearLayout.LayoutParams(1,dp(h)))}
+ private fun scroll(r:LinearLayout){setContentView(ScrollView(this).apply{isFillViewport=true;addView(r)})}
  private fun login(){
   val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL
   val u=EditText(this);u.hint="Username"
@@ -101,34 +115,53 @@ class MainActivity:Activity(){
  }
  private fun card(r:LinearLayout,title:String,value:String){val x=LinearLayout(this);x.orientation=LinearLayout.VERTICAL;x.setPadding(dp(8),dp(8),dp(8),dp(8));x.setBackgroundColor(Color.WHITE);x.addView(tv(title,13f));x.addView(tv(value,21f));r.addView(x)}
  private fun home(){
-  val r=layout("☕ Cafe Satu Nusa • "+session.role)
+  val r=layout("☕ Cafe Satu Nusa")
+  val greet=TextView(this);greet.text="Halo, "+session.name;greet.textSize=14f;greet.setTextColor(Color.DKGRAY);r.addView(greet)
+  val role=TextView(this);role.text=session.role+" • Operasional Hari Ini";role.textSize=12f;role.setTextColor(Color.GRAY);r.addView(role);addGap(r,12)
   val sum=db.readableDatabase.rawQuery("SELECT COUNT(*),COALESCE(SUM(total),0) FROM orders WHERE date(created_at/1000,'unixepoch','localtime')=date('now','localtime')",null);var trx=0L;var omzet=0L;if(sum.moveToFirst()){trx=sum.getLong(0);omzet=sum.getLong(1)};sum.close()
   val ex=db.readableDatabase.rawQuery("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE date(created_at/1000,'unixepoch','localtime')=date('now','localtime')",null);var expense=0L;if(ex.moveToFirst())expense=ex.getLong(0);ex.close()
-  val stats=LinearLayout(this);stats.orientation=LinearLayout.VERTICAL;stats.setPadding(dp(10),dp(10),dp(10),dp(10));card(stats,"Transaksi Hari Ini",trx.toString());card(stats,"Omzet Hari Ini",money(omzet));card(stats,"Pengeluaran Hari Ini",money(expense));card(stats,"Estimasi Laba",money(omzet-expense));r.addView(stats)
-  if(session.role in listOf("OWNER","ADMIN","KASIR"))r.addView(button("🧾 KASIR / POS"){pos()})
-  if(session.role in listOf("OWNER","ADMIN","KASIR","KITCHEN"))r.addView(button("🍳 KITCHEN DISPLAY"){kitchen()})
-  if(session.role in listOf("OWNER","ADMIN","KASIR"))r.addView(button("🪑 MEJA & PESANAN"){orders()})
-  if(session.role in listOf("OWNER","ADMIN"))r.addView(button("🍔 MENU & KATEGORI"){menuManager()})
-  if(session.role in listOf("OWNER","ADMIN","KITCHEN"))r.addView(button("📦 STOK & RESEP"){stockManager()})
-  if(session.role in listOf("OWNER","ADMIN","KASIR"))r.addView(button("👥 PELANGGAN"){customers()})
-  if(session.role in listOf("OWNER","ADMIN"))r.addView(button("👨‍💼 KARYAWAN & SHIFT"){employees()})
-  if(session.role in listOf("OWNER","ADMIN"))r.addView(button("💸 PENGELUARAN"){expenses()})
-  if(session.role in listOf("OWNER","ADMIN"))r.addView(button("📊 LAPORAN & ANALITIK"){reports()})
-  if(session.role in listOf("OWNER","ADMIN"))r.addView(button("🛠️ FITUR LANJUTAN"){advancedManager()})
-  if(session.role in listOf("OWNER","ADMIN"))r.addView(button("⚙️ PENGATURAN"){settings()})
-  if(session.loggedIn)r.addView(button("🚪 Logout Server"){session.clear();home()});scroll(r)
+  r.addView(section("Ringkasan Hari Ini"))
+  val s1=LinearLayout(this);s1.orientation=LinearLayout.HORIZONTAL;s1.addView(statCard("Transaksi",trx.toString()),LinearLayout.LayoutParams(0,dp(92),1f));s1.addView(statCard("Omzet",money(omzet)),LinearLayout.LayoutParams(0,dp(92),1f));r.addView(s1);addGap(r,8)
+  val s2=LinearLayout(this);s2.orientation=LinearLayout.HORIZONTAL;s2.addView(statCard("Pengeluaran",money(expense)),LinearLayout.LayoutParams(0,dp(92),1f));s2.addView(statCard("Estimasi Laba",money(omzet-expense)),LinearLayout.LayoutParams(0,dp(92),1f));r.addView(s2)
+  r.addView(section("Menu Utama"))
+  val grid=GridLayout(this);grid.columnCount=2
+  fun addMenu(label:String,fn:()->Unit){val v=button(label,fn);val lp=GridLayout.LayoutParams();lp.width=0;lp.height=dp(68);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(dp(4),dp(4),dp(4),dp(4));grid.addView(v,lp)}
+  if(session.role in listOf("OWNER","ADMIN","KASIR"))addMenu("🧾\nKasir / POS"){pos()}
+  if(session.role in listOf("OWNER","ADMIN","KASIR","KITCHEN"))addMenu("🍳\nKitchen"){kitchen()}
+  if(session.role in listOf("OWNER","ADMIN","KASIR"))addMenu("🪑\nPesanan"){orders()}
+  if(session.role in listOf("OWNER","ADMIN"))addMenu("🍔\nMenu"){menuManager()}
+  if(session.role in listOf("OWNER","ADMIN","KITCHEN"))addMenu("📦\nStok"){stockManager()}
+  if(session.role in listOf("OWNER","ADMIN","KASIR"))addMenu("👥\nPelanggan"){customers()}
+  if(session.role in listOf("OWNER","ADMIN"))addMenu("👨‍💼\nKaryawan"){employees()}
+  if(session.role in listOf("OWNER","ADMIN"))addMenu("💸\nPengeluaran"){expenses()}
+  if(session.role in listOf("OWNER","ADMIN"))addMenu("📊\nLaporan"){reports()}
+  if(session.role in listOf("OWNER","ADMIN"))addMenu("🛠️\nLanjutan"){advancedManager()}
+  if(session.role in listOf("OWNER","ADMIN"))addMenu("⚙️\nPengaturan"){settings()}
+  r.addView(grid);if(session.loggedIn){addGap(r,8);r.addView(button("🚪 Keluar dari Server"){session.clear();home()})};scroll(r)
  }
+ private fun statCard(title:String,value:String):TextView=TextView(this).apply{text=title+"\n"+value;textSize=13f;setTextColor(navy);typeface=Typeface.DEFAULT_BOLD;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(14),dp(10),dp(10),dp(10));background=bg(Color.WHITE,18)}
  private fun pos(){
-  val r=layout("🧾 Kasir / POS");r.addView(button("Meja: $table • Diskon: ${money(discount)}"){chooseTable()})
-  val cats=mutableListOf("Semua");db.readableDatabase.rawQuery("SELECT name FROM categories WHERE active=1 ORDER BY name",null).use{c->while(c.moveToNext())cats.add(c.getString(0))}
-  cats.forEach{cat->r.addView(button(if(cat=="Semua")"🍽 Semua Menu" else "• $cat"){menuForPos(r,if(cat=="Semua")null else cat)})}
-  r.addView(tv("Keranjang",18f));cartText=tv("");r.addView(cartText);totalText=tv("",20f);r.addView(totalText);r.addView(button("💵 BAYAR TUNAI"){pay("Tunai")});r.addView(button("📱 BAYAR QRIS / TRANSFER"){pay("QRIS")});r.addView(button("🗑 Kosongkan Keranjang"){cart.clear();refreshCart()});r.addView(button("Kembali"){home()});scroll(r);refreshCart()
+  val r=layout("🧾 Kasir / POS")
+  val top=LinearLayout(this);top.orientation=LinearLayout.HORIZONTAL;top.addView(button("🪑 "+table){chooseTable()},LinearLayout.LayoutParams(0,dp(52),1f));top.addView(button("🏷 "+money(discount)){discountDialog()},LinearLayout.LayoutParams(0,dp(52),1f));r.addView(top)
+  r.addView(section("Pilih Menu"))
+  val cats=mutableListOf("Semua");db.readableDatabase.rawQuery("SELECT name FROM categories WHERE active=1 ORDER BY name",null).use{c0->while(c0.moveToNext())cats.add(c0.getString(0))}
+  val catBar=LinearLayout(this);catBar.orientation=LinearLayout.HORIZONTAL
+  cats.forEach{cat->catBar.addView(button(cat){menuForPos(r,if(cat=="Semua")null else cat)},LinearLayout.LayoutParams(0,dp(48),1f))}
+  r.addView(catBar);r.addView(section("Keranjang"))
+  val cartBox=LinearLayout(this);cartBox.orientation=LinearLayout.VERTICAL;cartBox.setPadding(dp(14),dp(12),dp(14),dp(12));cartBox.background=bg(Color.WHITE,18);cartText=tv("");cartBox.addView(cartText);r.addView(cartBox)
+  totalText=TextView(this);totalText!!.textSize=24f;totalText!!.typeface=Typeface.DEFAULT_BOLD;totalText!!.setTextColor(accent);totalText!!.gravity=Gravity.CENTER;r.addView(totalText);addGap(r,6)
+  val pay=LinearLayout(this);pay.orientation=LinearLayout.HORIZONTAL;pay.addView(primaryButton("💵 Tunai"){pay("Tunai")},LinearLayout.LayoutParams(0,dp(56),1f));pay.addView(primaryButton("📱 QRIS"){pay("QRIS")},LinearLayout.LayoutParams(0,dp(56),1f));r.addView(pay);addGap(r,6)
+  r.addView(button("🗑 Kosongkan Keranjang"){cart.clear();refreshCart()});addGap(r,4);r.addView(button("‹ Kembali"){home()});scroll(r);refreshCart()
  }
  private fun menuForPos(parent:LinearLayout,cat:String?){
   val list=db.readableDatabase.rawQuery(if(cat==null)"SELECT id,name,price FROM menu WHERE active=1 ORDER BY name" else "SELECT id,name,price FROM menu WHERE active=1 AND category=? ORDER BY name",if(cat==null)null else arrayOf(cat))
-  val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL;box.setBackgroundColor(Color.WHITE)
-  list.use{c->while(c.moveToNext()){val id=c.getLong(0);val name=c.getString(1);val price=c.getLong(2);box.addView(button(name+" • "+money(price)){val old=cart[id];if(old==null)cart[id]=CartItem(id,name,price,1) else old.qty++;refreshCart()})}}
-  parent.addView(box)
+  val grid=GridLayout(this);grid.columnCount=2;grid.setPadding(dp(2),dp(6),dp(2),dp(6))
+  list.use{c0->while(c0.moveToNext()){
+   val id=c0.getLong(0);val name=c0.getString(1);val price=c0.getLong(2)
+   val v=button(name+"\n"+money(price)){val old=cart[id];if(old==null)cart[id]=CartItem(id,name,price,1) else old.qty++;refreshCart()}
+   val lp=GridLayout.LayoutParams();lp.width=0;lp.height=dp(82);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(dp(4),dp(4),dp(4),dp(4));grid.addView(v,lp)
+  }}
+  parent.addView(grid)
  }
  private fun refreshCart(){
   val lines=cart.values.joinToString("\n"){it.name+" x"+it.qty+" = "+money(it.price*it.qty)}
