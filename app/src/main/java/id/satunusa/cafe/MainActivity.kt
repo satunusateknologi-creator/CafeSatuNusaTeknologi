@@ -65,7 +65,7 @@ class MainActivity:Activity(){
   lines.append("Order #").append(id).append("\n")
   lines.append("Meja: ").append(table).append("\n")
   lines.append("------------------------------\n")
-  cart.values.forEach{lines.append(it.name).append(" x").append(it.qty).append("  ").append(money(it.price*it.qty)).append("\n")}
+  db.readableDatabase.rawQuery("SELECT menu_name,qty,price FROM order_items WHERE order_id=? ORDER BY id",arrayOf(id.toString())).use{c->while(c.moveToNext()){lines.append(c.getString(0)).append(" x").append(c.getInt(1)).append("  ").append(money(c.getLong(2)*c.getInt(1))).append("\n")}}
   lines.append("------------------------------\n")
   lines.append("Pembayaran: ").append(method).append("\n")
   lines.append("TOTAL: ").append(money(total)).append("\n")
