@@ -155,7 +155,44 @@ class MainActivity:Activity(){
   r.addView(button("Kembali"){home()});scroll(r)
  }
  private fun supplierManager(){
-  val r=layout("🏭 Supplier");r.addView(button("＋ Tambah Supplier"){val b=LinearLayout(this);b.orientation=LinearLayout.VERTICAL;val n=EditText(this);n.hint="Nama";val p=EditText(this);p.hint="Telepon";val a=EditText(this);a.hint="Alamat";b.addView(n);b.addView(p);b.addView(a);AlertDialog.Builder(this).setTitle("Supplier").setView(b).setPositiveButton("Simpan"){_,_->db.addSupplier(n.text.toString(),p.text.toString(),a.text.toString());supplierManager()}.show()});db.readableDatabase.rawQuery("SELECT name,phone,address FROM suppliers WHERE active=1 ORDER BY name",null).use{c->while(c.moveToNext())r.addView(tv(c.getString(0)+" • "+(c.getString(1)?:"")+" • "+(c.getString(2)?:""))) };r.addView(button("Kembali"){advancedManager()});scroll(r)
+  val r=layout("🏭 Supplier")
+  r.addView(button("🛒 Catat Pembelian / Stok Masuk"){purchaseForm()})
+  r.addView(button("＋ Tambah Supplier"){val b=LinearLayout(this);b.orientation=LinearLayout.VERTICAL;val n=EditText(this);n.hint="Nama";val p=EditText(this);p.hint="Telepon";val a=EditText(this);a.hint="Alamat";b.addView(n);b.addView(p);b.addView(a);AlertDialog.Builder(this).setTitle("Supplier").setView(b).setPositiveButton("Simpan"){_,_->db.addSupplier(n.text.toString(),p.text.toString(),a.text.toString());supplierManager()}.show()});db.readableDatabase.rawQuery("SELECT name,phone,address FROM suppliers WHERE active=1 ORDER BY name",null).use{c->while(c.moveToNext())r.addView(tv(c.getString(0)+" • "+(c.getString(1)?:"")+" • "+(c.getString(2)?:""))) };r.addView(button("Kembali"){advancedManager()});scroll(r)
+ }
+ private fun purchaseForm(){
+  val suppliers=mutableListOf<Pair<Long,String>>()
+  db.readableDatabase.rawQuery("SELECT id,name FROM suppliers WHERE active=1 ORDER BY name",null).use{c->while(c.moveToNext())suppliers.add(c.getLong(0) to c.getString(1))}
+  val stocks=mutableListOf<Pair<Long,String>>()
+  db.readableDatabase.rawQuery("SELECT id,name FROM stock ORDER BY name",null).use{c->while(c.moveToNext())stocks.add(c.getLong(0) to c.getString(1))}
+  if(suppliers.isEmpty()){toast("Tambahkan supplier terlebih dahulu");return}
+  if(stocks.isEmpty()){toast("Tambahkan bahan terlebih dahulu");return}
+  AlertDialog.Builder(this).setTitle("Pilih Supplier").setItems(suppliers.map{it.second}.toTypedArray()){_,si->
+   AlertDialog.Builder(this).setTitle("Pilih Bahan").setItems(stocks.map{it.second}.toTypedArray()){_,bi->
+    val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL
+    val qty=EditText(this);qty.hint="Jumlah";qty.inputType=2
+    val price=EditText(this);price.hint="Harga satuan";price.inputType=2
+    box.addView(qty);box.addView(price)
+    AlertDialog.Builder(this).setTitle("Pembelian").setView(box).setPositiveButton("Simpan"){_,_->
+     val q=qty.text.toString().toDoubleOrNull()?:0.0
+     val unit=price.text.toString().toLongOrNull()?:0L
+     if(q<=0||unit<0){toast("Jumlah/harga tidak valid");return@setPositiveButton}
+     val total=Math.round(q*unit)
+     val d=db.writableDatabase;d.beginTransaction()
+     try{
+      val pv=ContentValues().apply{put("supplier_id",suppliers[si].first);put("total",total);put("status","RECEIVED");put("created_at",System.currentTimeMillis())}
+      val purchaseId=d.insertOrThrow("purchases",null,pv)
+      val iv=ContentValues().apply{put("purchase_id",purchaseId);put("stock_id",stocks[bi].first);put("qty",q);put("unit_price",unit)}
+      d.insertOrThrow("purchase_items",null,iv)
+      d.execSQL("UPDATE stock SET qty=qty+? WHERE id=?",arrayOf(q,stocks[bi].first))
+      d.execSQL("INSERT INTO stock_movements(stock_id,type,qty,reference,created_at) VALUES(?,?,?,?,?)",arrayOf(stocks[bi].first,"PURCHASE",q,"PURCHASE #"+purchaseId,System.currentTimeMillis()))
+      db.logAudit("PURCHASE","PURCHASE",purchaseId,"supplier="+suppliers[si].first+";stock="+stocks[bi].first+";qty="+q+";total="+total)
+      d.setTransactionSuccessful()
+      toast("Pembelian tersimpan dan stok bertambah")
+     }catch(e:Exception){toast("Pembelian gagal: "+(e.message?:"database error"))}finally{d.endTransaction()}
+     supplierManager()
+    }.setNegativeButton("Batal",null).show()
+   }.show()
+  }.show()
  }
  private fun refundDialog(){
   val e=EditText(this);e.hint="ID Order";e.inputType=2
