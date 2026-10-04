@@ -6,7 +6,11 @@ import android.os.Bundle
 import android.graphics.Color
 import android.content.ContentValues
 import android.content.Intent
+import android.net.Uri
 import android.view.Gravity
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import android.widget.*
 import java.util.Locale
 
@@ -21,12 +25,50 @@ class MainActivity:Activity(){
  private var servicePercent=0.0
  private var cartText:TextView?=null
  private var totalText:TextView?=null
+ private val backupRequest=9101
+ private val restoreRequest=9102
  private fun money(v:Long)="Rp "+String.format(Locale.US,"%,d",v).replace(',','.')
  private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
  private fun tv(s:String,size:Float=16f)=TextView(this).apply{text=s;textSize=size;setTextColor(Color.rgb(35,35,35));setPadding(dp(16),dp(10),dp(16),dp(10))}
  private fun button(s:String,fn:()->Unit)=Button(this).apply{text=s;setOnClickListener{fn()}}
  private fun layout(title:String):LinearLayout{val r=LinearLayout(this);r.orientation=LinearLayout.VERTICAL;r.setBackgroundColor(Color.rgb(248,249,250));val h=TextView(this).apply{text=title;textSize=22f;setTextColor(Color.WHITE);setGravity(Gravity.CENTER_VERTICAL);setPadding(dp(18),dp(18),dp(18),dp(18));setBackgroundColor(Color.rgb(24,28,35))};r.addView(h,LinearLayout.LayoutParams(-1,dp(64)));return r}
  private fun scroll(r:LinearLayout){setContentView(ScrollView(this).apply{addView(r)})}
+ private fun backupDatabase(){
+  val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply{
+   addCategory(Intent.CATEGORY_OPENABLE);type="application/octet-stream";putExtra(Intent.EXTRA_TITLE,"cafe-satu-nusa-backup.db")
+  }
+  startActivityForResult(intent,backupRequest)
+ }
+ private fun restoreDatabase(){
+  val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply{addCategory(Intent.CATEGORY_OPENABLE);type="application/octet-stream"}
+  startActivityForResult(intent,restoreRequest)
+ }
+ override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){
+  super.onActivityResult(requestCode,resultCode,data)
+  if(resultCode!=RESULT_OK||data?.data==null)return
+  val uri=data.data!!
+  try{
+   val target=File(applicationInfo.dataDir+"/databases/cafe.db")
+   if(requestCode==backupRequest){
+    db.close()
+    FileInputStream(target).use{input->contentResolver.openOutputStream(uri)?.use{output->input.copyTo(output)}?:throw IllegalStateException("Tidak dapat membuka file tujuan")}
+    db=CafeDb(this)
+    toast("Backup database berhasil")
+   }else if(requestCode==restoreRequest){
+    db.close()
+    File(target.parentFile,"cafe.db-wal").delete()
+    File(target.parentFile,"cafe.db-shm").delete()
+    contentResolver.openInputStream(uri)?.use{input->FileOutputStream(target).use{output->input.copyTo(output)}}?:throw IllegalStateException("Tidak dapat membaca backup")
+    db=CafeDb(this)
+    taxPercent=db.setting("tax_percent","0").toDoubleOrNull()?:0.0
+    servicePercent=db.setting("service_percent","0").toDoubleOrNull()?:0.0
+    toast("Restore berhasil. Data lokal telah dipulihkan")
+   }
+  }catch(e:Exception){
+   db=CafeDb(this)
+   toast("Backup/restore gagal: "+(e.message?:"kesalahan file"))
+  }
+ }
  override fun onCreate(b:Bundle?){super.onCreate(b);db=CafeDb(this);taxPercent=db.setting("tax_percent","0").toDoubleOrNull()?:0.0;servicePercent=db.setting("service_percent","0").toDoubleOrNull()?:0.0;home()}
  private fun card(r:LinearLayout,title:String,value:String){val x=LinearLayout(this);x.orientation=LinearLayout.VERTICAL;x.setPadding(dp(8),dp(8),dp(8),dp(8));x.setBackgroundColor(Color.WHITE);x.addView(tv(title,13f));x.addView(tv(value,21f));r.addView(x)}
  private fun home(){
@@ -150,7 +192,8 @@ class MainActivity:Activity(){
   r.addView(button("➕ Tambah Modifier / Topping"){val b=LinearLayout(this);b.orientation=LinearLayout.VERTICAL;val n=EditText(this);n.hint="Nama topping";val p=EditText(this);p.hint="Harga";p.inputType=2;b.addView(n);b.addView(p);AlertDialog.Builder(this).setTitle("Modifier / Topping").setView(b).setPositiveButton("Simpan"){_,_->db.addModifier(n.text.toString(),p.text.toString().toLongOrNull()?:0);toast("Modifier disimpan")}.setNegativeButton("Batal",null).show()})
   r.addView(button("🏭 Supplier"){supplierManager()})
   r.addView(button("↩ Refund Order"){refundDialog()})
-  r.addView(button("💾 Backup Database"){toast("Backup lokal akan tersedia pada paket rilis berikutnya")})
+  r.addView(button("💾 Backup Database"){backupDatabase()})
+  r.addView(button("♻️ Restore Database"){restoreDatabase()})
   r.addView(button("🔄 Sinkronisasi Server"){syncNow()})
   r.addView(button("Kembali"){home()});scroll(r)
  }
