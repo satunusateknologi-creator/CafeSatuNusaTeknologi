@@ -119,8 +119,10 @@ class MainActivity:Activity(){
      while(c.moveToNext()){
       val stockId=c.getLong(0)
       val used=c.getDouble(1)*item.qty
-      d.execSQL("UPDATE stock SET qty=qty-? WHERE id=?",arrayOf(used,stockId))
-      d.execSQL("INSERT INTO stock_movements(stock_id,type,qty,reference,created_at) VALUES(?,?,?,?,?)",arrayOf(stockId,"SALE",-used,"ORDER #$orderId",System.currentTimeMillis()))
+      val available=d.rawQuery("SELECT qty FROM stock WHERE id=?",arrayOf(stockId.toString())).use{s->if(s.moveToFirst())s.getDouble(0)else 0.0}
+      if(available+0.000001<used)throw IllegalStateException("Stok tidak cukup untuk "+item.name)
+      d.execSQL("UPDATE stock SET qty=qty-? WHERE id=? AND qty>=?",arrayOf(used,stockId,used))
+      d.execSQL("INSERT INTO stock_movements(stock_id,type,qty,reference,created_at) VALUES(?,?,?,?,?)",arrayOf(stockId,"SALE",used,"ORDER #"+orderId,System.currentTimeMillis()))
      }
     }
    }
