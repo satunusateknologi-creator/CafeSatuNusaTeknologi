@@ -55,10 +55,42 @@ class MainActivity:Activity(){
  }
  private fun pay(method:String){
   if(cart.isEmpty()){toast("Keranjang kosong");return}
-  val sub=cart.values.sumOf{it.price*it.qty};val net=(sub-discount).coerceAtLeast(0);val tax=Math.round(net*taxPercent/100);val service=Math.round(net*servicePercent/100);val total=net+tax+service
-  val v=ContentValues().apply{put("subtotal",sub);put("total",total);put("payment",method);put("status","BARU");put("table_no",table);put("discount",discount);put("tax",tax);put("service",service);put("created_at",System.currentTimeMillis())}
-  val id=db.writableDatabase.insert("orders",null,v);cart.values.forEach{item->val iv=ContentValues().apply{put("order_id",id);put("menu_id",item.id);put("menu_name",item.name);put("qty",item.qty);put("price",item.price)};db.writableDatabase.insert("order_items",null,iv)}
-  cart.clear();discount=0;showReceipt(id,total,method)
+  val sub=cart.values.sumOf{it.price*it.qty}
+  val net=(sub-discount).coerceAtLeast(0)
+  val tax=Math.round(net*taxPercent/100)
+  val service=Math.round(net*servicePercent/100)
+  val total=net+tax+service
+  val d=db.writableDatabase
+  d.beginTransaction()
+  var orderId=-1L
+  try{
+   val v=ContentValues().apply{
+    put("subtotal",sub);put("total",total);put("payment",method);put("status","BARU")
+    put("table_no",table);put("discount",discount);put("tax",tax);put("service",service)
+    put("created_at",System.currentTimeMillis());put("sync_status","PENDING")
+   }
+   orderId=d.insertOrThrow("orders",null,v)
+   for(item in cart.values){
+    val iv=ContentValues().apply{put("order_id",orderId);put("menu_id",item.id);put("menu_name",item.name);put("qty",item.qty);put("price",item.price)}
+    d.insertOrThrow("order_items",null,iv)
+    d.rawQuery("SELECT stock_id,qty FROM recipes WHERE menu_id=?",arrayOf(item.id.toString())).use{c->
+     while(c.moveToNext()){
+      val stockId=c.getLong(0)
+      val used=c.getDouble(1)*item.qty
+      d.execSQL("UPDATE stock SET qty=qty-? WHERE id=?",arrayOf(used,stockId))
+      d.execSQL("INSERT INTO stock_movements(stock_id,type,qty,reference,created_at) VALUES(?,?,?,?,?)",arrayOf(stockId,"SALE",-used,"ORDER #$orderId",System.currentTimeMillis()))
+     }
+    }
+   }
+   d.execSQL("INSERT INTO sync_queue(entity,entity_id,action,payload,created_at,synced) VALUES('ORDER',?,?,?, ?,0)",arrayOf(orderId,"CREATE","LOCAL_ORDER",System.currentTimeMillis()))
+   db.logAudit("SALE","ORDER",orderId,"total=$total;payment=$method")
+   d.setTransactionSuccessful()
+  }catch(e:Exception){
+   toast("Transaksi gagal: "+(e.message?:"kesalahan database"))
+   return
+  }finally{d.endTransaction()}
+  cart.clear();discount=0
+  showReceipt(orderId,total,method)
  }
  private fun showReceipt(id:Long,total:Long,method:String){
   val lines=StringBuilder()
