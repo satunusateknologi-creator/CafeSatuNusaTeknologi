@@ -34,7 +34,7 @@ class MainActivity:Activity(){
   val sum=db.readableDatabase.rawQuery("SELECT COUNT(*),COALESCE(SUM(total),0) FROM orders WHERE date(created_at/1000,'unixepoch','localtime')=date('now','localtime')",null);var trx=0L;var omzet=0L;if(sum.moveToFirst()){trx=sum.getLong(0);omzet=sum.getLong(1)};sum.close()
   val ex=db.readableDatabase.rawQuery("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE date(created_at/1000,'unixepoch','localtime')=date('now','localtime')",null);var expense=0L;if(ex.moveToFirst())expense=ex.getLong(0);ex.close()
   val stats=LinearLayout(this);stats.orientation=LinearLayout.VERTICAL;stats.setPadding(dp(10),dp(10),dp(10),dp(10));card(stats,"Transaksi Hari Ini",trx.toString());card(stats,"Omzet Hari Ini",money(omzet));card(stats,"Pengeluaran Hari Ini",money(expense));card(stats,"Estimasi Laba",money(omzet-expense));r.addView(stats)
-  r.addView(button("🧾 KASIR / POS"){pos()});r.addView(button("🍳 KITCHEN DISPLAY"){kitchen()});r.addView(button("🪑 MEJA & PESANAN"){orders()});r.addView(button("🍔 MENU & KATEGORI"){menuManager()});r.addView(button("📦 STOK & RESEP"){stockManager()});r.addView(button("👥 PELANGGAN"){customers()});r.addView(button("👨‍💼 KARYAWAN & SHIFT"){employees()});r.addView(button("💸 PENGELUARAN"){expenses()});r.addView(button("📊 LAPORAN & ANALITIK"){reports()});r.addView(button("⚙️ PENGATURAN"){settings()});scroll(r)
+  r.addView(button("🧾 KASIR / POS"){pos()});r.addView(button("🍳 KITCHEN DISPLAY"){kitchen()});r.addView(button("🪑 MEJA & PESANAN"){orders()});r.addView(button("🍔 MENU & KATEGORI"){menuManager()});r.addView(button("📦 STOK & RESEP"){stockManager()});r.addView(button("👥 PELANGGAN"){customers()});r.addView(button("👨‍💼 KARYAWAN & SHIFT"){employees()});r.addView(button("💸 PENGELUARAN"){expenses()});r.addView(button("📊 LAPORAN & ANALITIK"){reports()});r.addView(button("🛠️ FITUR LANJUTAN"){advancedManager()});r.addView(button("⚙️ PENGATURAN"){settings()});scroll(r)
  }
  private fun pos(){
   val r=layout("🧾 Kasir / POS");r.addView(button("Meja: $table • Diskon: ${money(discount)}"){chooseTable()})
@@ -113,6 +113,24 @@ class MainActivity:Activity(){
   if(menus.isEmpty()||stocks.isEmpty()){toast("Menu dan bahan harus tersedia");return}
   AlertDialog.Builder(this).setTitle("Pilih Menu").setItems(menus.map{it.second}.toTypedArray()){_,mi->AlertDialog.Builder(this).setTitle("Pilih Bahan").setItems(stocks.map{it.second}.toTypedArray()){_,si->val q=EditText(this);q.hint="Jumlah per 1 porsi";q.inputType=2;AlertDialog.Builder(this).setTitle("Resep").setView(q).setPositiveButton("Simpan"){_,_->db.writableDatabase.delete("recipes","menu_id=? AND stock_id=?",arrayOf(menus[mi].first.toString(),stocks[si].first.toString()));db.writableDatabase.execSQL("INSERT INTO recipes(menu_id,stock_id,qty) VALUES(?,?,?)",arrayOf(menus[mi].first,stocks[si].first,q.text.toString().toDoubleOrNull()?:0.0));toast("Resep disimpan")}.show()}.show()}.show()
  }
+ private fun advancedManager(){
+  val r=layout("🛠️ Fitur Lanjutan")
+  r.addView(button("➕ Tambah Modifier / Topping"){val b=LinearLayout(this);b.orientation=LinearLayout.VERTICAL;val n=EditText(this);n.hint="Nama topping";val p=EditText(this);p.hint="Harga";p.inputType=2;b.addView(n);b.addView(p);AlertDialog.Builder(this).setTitle("Modifier / Topping").setView(b).setPositiveButton("Simpan"){_,_->db.addModifier(n.text.toString(),p.text.toString().toLongOrNull()?:0);toast("Modifier disimpan")}.setNegativeButton("Batal",null).show()})
+  r.addView(button("🏭 Supplier"){supplierManager()})
+  r.addView(button("↩ Refund Order"){refundDialog()})
+  r.addView(button("💾 Backup Database"){toast("Backup lokal akan tersedia pada paket rilis berikutnya")})
+  r.addView(button("🔄 Sinkronisasi Server"){syncNow()})
+  r.addView(button("Kembali"){home()});scroll(r)
+ }
+ private fun supplierManager(){
+  val r=layout("🏭 Supplier");r.addView(button("＋ Tambah Supplier"){val b=LinearLayout(this);b.orientation=LinearLayout.VERTICAL;val n=EditText(this);n.hint="Nama";val p=EditText(this);p.hint="Telepon";val a=EditText(this);a.hint="Alamat";b.addView(n);b.addView(p);b.addView(a);AlertDialog.Builder(this).setTitle("Supplier").setView(b).setPositiveButton("Simpan"){_,_->db.addSupplier(n.text.toString(),p.text.toString(),a.text.toString());supplierManager()}.show()});db.readableDatabase.rawQuery("SELECT name,phone,address FROM suppliers WHERE active=1 ORDER BY name",null).use{c->while(c.moveToNext())r.addView(tv(c.getString(0)+" • "+(c.getString(1)?:"")+" • "+(c.getString(2)?:""))) };r.addView(button("Kembali"){advancedManager()});scroll(r)
+ }
+ private fun refundDialog(){
+  val e=EditText(this);e.hint="ID Order";e.inputType=2
+  AlertDialog.Builder(this).setTitle("Refund").setMessage("Refund akan menandai order sebagai REFUND.").setView(e).setPositiveButton("Lanjut"){_,_->val id=e.text.toString().toLongOrNull()?:0;refundReason(id)}.setNegativeButton("Batal",null).show()
+ }
+ private fun refundReason(id:Long){val b=EditText(this);b.hint="Alasan refund";AlertDialog.Builder(this).setTitle("Alasan Refund").setView(b).setPositiveButton("Proses"){_,_->val q=db.readableDatabase.rawQuery("SELECT total FROM orders WHERE id=?",arrayOf(id.toString()));var amount=0L;if(q.moveToFirst())amount=q.getLong(0);q.close();if(amount>0){db.refund(id,amount,b.text.toString());toast("Refund order #"+id+" berhasil")}else toast("Order tidak ditemukan")}}.show()}
+ private fun syncNow(){val url=db.setting("server_url","").trim();if(url.isBlank()){toast("Isi URL server di Pengaturan");return};Thread{val result=ApiClient(url).get("health");runOnUiThread{toast(if(result.isSuccess)"Server siap disinkronkan" else "Koneksi server gagal")}}.start()}
  private fun customers(){
   val r=layout("👥 Pelanggan");r.addView(button("＋ Tambah Pelanggan"){val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL;val n=EditText(this);n.hint="Nama";val p=EditText(this);p.hint="No. HP";box.addView(n);box.addView(p);AlertDialog.Builder(this).setTitle("Pelanggan").setView(box).setPositiveButton("Simpan"){_,_->val v=ContentValues().apply{put("name",n.text.toString());put("phone",p.text.toString())};db.writableDatabase.insert("customers",null,v);customers()}.show()});db.readableDatabase.rawQuery("SELECT name,phone,points FROM customers ORDER BY name",null).use{c->while(c.moveToNext())r.addView(tv(c.getString(0)+" • "+c.getString(1)+" • "+c.getInt(2)+" poin"))};r.addView(button("Kembali"){home()});scroll(r)
  }
