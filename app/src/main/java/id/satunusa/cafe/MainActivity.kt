@@ -4,6 +4,7 @@ import android.app.Activity
 import android.os.Bundle
 import android.graphics.Color
 import android.content.ContentValues
+import android.content.Intent
 import android.view.Gravity
 import android.widget.*
 import java.util.Locale
@@ -56,7 +57,20 @@ class MainActivity:Activity(){
   val sub=cart.values.sumOf{it.price*it.qty};val net=(sub-discount).coerceAtLeast(0);val tax=Math.round(net*taxPercent/100);val service=Math.round(net*servicePercent/100);val total=net+tax+service
   val v=ContentValues().apply{put("subtotal",sub);put("total",total);put("payment",method);put("status","BARU");put("table_no",table);put("discount",discount);put("tax",tax);put("service",service);put("created_at",System.currentTimeMillis())}
   val id=db.writableDatabase.insert("orders",null,v);cart.values.forEach{item->val iv=ContentValues().apply{put("order_id",id);put("menu_id",item.id);put("menu_name",item.name);put("qty",item.qty);put("price",item.price)};db.writableDatabase.insert("order_items",null,iv)}
-  cart.clear();discount=0;toast("Order #$id tersimpan • $method");home()
+  cart.clear();discount=0;showReceipt(id,total,method)
+ }
+ private fun showReceipt(id:Long,total:Long,method:String){
+  val lines=StringBuilder()
+  lines.append("CAFE SATU NUSA\n")
+  lines.append("Order #").append(id).append("\n")
+  lines.append("Meja: ").append(table).append("\n")
+  lines.append("------------------------------\n")
+  cart.values.forEach{lines.append(it.name).append(" x").append(it.qty).append("  ").append(money(it.price*it.qty)).append("\n")}
+  lines.append("------------------------------\n")
+  lines.append("Pembayaran: ").append(method).append("\n")
+  lines.append("TOTAL: ").append(money(total)).append("\n")
+  lines.append("Terima kasih.\n")
+  AlertDialog.Builder(this).setTitle("Struk #"+id).setMessage(lines.toString()).setPositiveButton("Bagikan"){_,_->val send=Intent(Intent.ACTION_SEND);send.type="text/plain";send.putExtra(Intent.EXTRA_TEXT,lines.toString());startActivity(Intent.createChooser(send,"Bagikan Struk"))}.setNegativeButton("Selesai"){_,_->home()}.show()
  }
  private fun chooseTable(){val r=layout("🪑 Pilih Meja");r.addView(button("Takeaway"){table="Takeaway";pos()});for(i in 1..12)r.addView(button("Meja $i"){table="Meja $i";pos()});r.addView(button("Kembali"){pos()});scroll(r)}
  private fun orders(){
