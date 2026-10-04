@@ -286,8 +286,32 @@ class MainActivity:Activity(){
   val e=EditText(this);e.hint="ID Order";e.inputType=2
   AlertDialog.Builder(this).setTitle("Refund").setMessage("Refund akan menandai order sebagai REFUND.").setView(e).setPositiveButton("Lanjut"){_,_->val id=e.text.toString().toLongOrNull()?:0;refundReason(id)}.setNegativeButton("Batal",null).show()
  }
- private fun refundReason(id:Long){val b=EditText(this);b.hint="Alasan refund";AlertDialog.Builder(this).setTitle("Alasan Refund").setView(b).setPositiveButton("Proses"){_,_->val q=db.readableDatabase.rawQuery("SELECT total FROM orders WHERE id=?",arrayOf(id.toString()));var amount=0L;if(q.moveToFirst())amount=q.getLong(0);q.close();if(amount>0){db.refund(id,amount,b.text.toString());toast("Refund order #"+id+" berhasil")}else toast("Order tidak ditemukan")}}.show()}
- private fun syncNow(){val url=db.setting("server_url","").trim();if(url.isBlank()){toast("Isi URL server di Pengaturan");return};Thread{val result=ApiClient(url).get("health");runOnUiThread{toast(if(result.isSuccess)"Server siap disinkronkan" else "Koneksi server gagal")}}.start()}
+ private fun refundReason(id:Long){
+  val b=EditText(this);b.hint="Alasan refund"
+  AlertDialog.Builder(this).setTitle("Alasan Refund").setView(b)
+   .setPositiveButton("Proses"){_,_->
+    val q=db.readableDatabase.rawQuery("SELECT total,refund_amount,status FROM orders WHERE id=?",arrayOf(id.toString()))
+    var amount=0L
+    var refunded=0L
+    var status=""
+    if(q.moveToFirst()){amount=q.getLong(0);refunded=q.getLong(1);status=q.getString(2)}
+    q.close()
+    if(amount<=0){toast("Order tidak ditemukan");return@setPositiveButton}
+    if(status=="REFUND"){toast("Order sudah refund");return@setPositiveButton}
+    val available=amount-refunded
+    if(available<=0){toast("Sisa refund sudah habis");return@setPositiveButton}
+    try{db.refund(id,available,b.text.toString());toast("Refund order #"+id+" berhasil")}catch(e:Exception){toast(e.message?:"Refund gagal")}
+   }
+   .setNegativeButton("Batal",null).show()
+ }
+ private fun syncNow(){
+  val url=db.setting("server_url","").trim()
+  if(url.isBlank()){toast("Isi URL server di Pengaturan");return}
+  Thread{
+   val result=ApiClient(url,session.token).get("health")
+   runOnUiThread{toast(if(result.isSuccess)"Server siap disinkronkan" else "Koneksi server gagal")}
+  }.start()
+ }
  private fun customers(){
   val r=layout("👥 Pelanggan");r.addView(button("＋ Tambah Pelanggan"){val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL;val n=EditText(this);n.hint="Nama";val p=EditText(this);p.hint="No. HP";box.addView(n);box.addView(p);AlertDialog.Builder(this).setTitle("Pelanggan").setView(box).setPositiveButton("Simpan"){_,_->val v=ContentValues().apply{put("name",n.text.toString());put("phone",p.text.toString())};db.writableDatabase.insert("customers",null,v);customers()}.show()});db.readableDatabase.rawQuery("SELECT name,phone,points FROM customers ORDER BY name",null).use{c->while(c.moveToNext())r.addView(tv(c.getString(0)+" • "+c.getString(1)+" • "+c.getInt(2)+" poin"))};r.addView(button("Kembali"){home()});scroll(r)
  }
