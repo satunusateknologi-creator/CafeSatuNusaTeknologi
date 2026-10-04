@@ -29,6 +29,8 @@ class MainActivity:Activity(){
  private var cartText:TextView?=null
  private var totalText:TextView?=null
  private var menuArea:LinearLayout?=null
+ private var menuSearch:EditText?=null
+ private var selectedCategory:String?=null
  private val backupRequest=9101
  private val restoreRequest=9102
  private lateinit var session:SessionManager
@@ -158,9 +160,16 @@ class MainActivity:Activity(){
   val r=layout("🧾 Kasir / POS")
   val top=LinearLayout(this);top.orientation=LinearLayout.HORIZONTAL;top.addView(button("🪑 "+table){chooseTable()},LinearLayout.LayoutParams(0,dp(52),1f));top.addView(button("🏷 "+money(discount)){discountDialog()},LinearLayout.LayoutParams(0,dp(52),1f));r.addView(top)
   r.addView(section("Pilih Menu"))
+  menuSearch=field("🔎 Cari menu")
+  r.addView(menuSearch)
+  menuSearch!!.addTextChangedListener(object:android.text.TextWatcher{
+   override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){}
+   override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){menuForPos(r,selectedCategory)}
+   override fun afterTextChanged(s:android.text.Editable?){}
+  })
   val cats=mutableListOf("Semua");db.readableDatabase.rawQuery("SELECT name FROM categories WHERE active=1 ORDER BY name",null).use{c0->while(c0.moveToNext())cats.add(c0.getString(0))}
   val catBar=LinearLayout(this);catBar.orientation=LinearLayout.HORIZONTAL
-  cats.forEach{cat->catBar.addView(button(cat){menuForPos(r,if(cat=="Semua")null else cat)},LinearLayout.LayoutParams(dp(120),dp(48)))}
+  cats.forEach{cat->catBar.addView(button(cat){selectedCategory=if(cat=="Semua")null else cat;menuForPos(r,selectedCategory)},LinearLayout.LayoutParams(dp(120),dp(48)))}
   val catScroll=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;addView(catBar)}
   r.addView(catScroll)
   menuArea=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
@@ -172,20 +181,43 @@ class MainActivity:Activity(){
   r.addView(button("🗑 Kosongkan Keranjang"){cart.clear();refreshCart()});addGap(r,4);r.addView(button("‹ Kembali"){home()});scroll(r);refreshCart()
  }
  private fun menuForPos(parent:LinearLayout,cat:String?){
-  val list=db.readableDatabase.rawQuery(if(cat==null)"SELECT id,name,price FROM menu WHERE active=1 ORDER BY name" else "SELECT id,name,price FROM menu WHERE active=1 AND category=? ORDER BY name",if(cat==null)null else arrayOf(cat))
+  val search=menuSearch?.text?.toString()?.trim()?:""
+  val sql=StringBuilder("SELECT id,name,price FROM menu WHERE active=1")
+  val args=mutableListOf<String>()
+  if(cat!=null){sql.append(" AND category=?");args.add(cat)}
+  if(search.isNotBlank()){sql.append(" AND name LIKE ?");args.add("%"+search+"%")}
+  sql.append(" ORDER BY name")
+  val list=db.readableDatabase.rawQuery(sql.toString(),if(args.isEmpty())null else args.toTypedArray())
   val grid=GridLayout(this);grid.columnCount=2;grid.setPadding(dp(2),dp(6),dp(2),dp(6))
+  var count=0
   list.use{c0->while(c0.moveToNext()){
+   count++
    val id=c0.getLong(0);val name=c0.getString(1);val price=c0.getLong(2)
    val v=button(name+"\n"+money(price)){val old=cart[id];if(old==null)cart[id]=CartItem(id,name,price,1) else old.qty++;refreshCart()}
    val lp=GridLayout.LayoutParams();lp.width=0;lp.height=dp(82);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(dp(4),dp(4),dp(4),dp(4));grid.addView(v,lp)
   }}
   menuArea?.removeAllViews()
-  menuArea?.addView(grid)
+  if(count==0)menuArea?.addView(tv("Menu tidak ditemukan.",14f)) else menuArea?.addView(grid)
  }
  private fun refreshCart(){
-  val lines=cart.values.joinToString("\n"){it.name+" x"+it.qty+" = "+money(it.price*it.qty)}
   val sub=cart.values.sumOf{it.price*it.qty};val net=(sub-discount).coerceAtLeast(0);val tax=Math.round(net*taxPercent/100);val service=Math.round(net*servicePercent/100);val total=net+tax+service
-  cartText?.text=if(lines.isBlank())"Keranjang kosong" else lines+"\n\nSubtotal: "+money(sub)+"\nDiskon: "+money(discount)+"\nPajak: "+money(tax)+"\nService: "+money(service);totalText?.text="TOTAL  "+money(total)
+  val box=cartText?.parent as? LinearLayout ?: return
+  box.removeAllViews()
+  if(cart.isEmpty()){box.addView(tv("Keranjang kosong",14f))}else{
+   cart.values.toList().forEach{item->
+    val row=LinearLayout(this);row.gravity=Gravity.CENTER_VERTICAL
+    val info=TextView(this);info.text=item.name+"\n"+money(item.price)+" × "+item.qty;info.textSize=14f;info.setTextColor(ink);info.setPadding(0,dp(5),dp(6),dp(5))
+    row.addView(info,LinearLayout.LayoutParams(0,LinearLayout.LayoutParams.WRAP_CONTENT,1f))
+    row.addView(button("−"){item.qty--;if(item.qty<=0)cart.remove(item.id);refreshCart()},LinearLayout.LayoutParams(dp(48),dp(44)))
+    val q=TextView(this);q.text=item.qty.toString();q.textSize=15f;q.typeface=Typeface.DEFAULT_BOLD;q.gravity=Gravity.CENTER;q.setTextColor(navy);row.addView(q,LinearLayout.LayoutParams(dp(34),dp(44)))
+    row.addView(primaryButton("+"){item.qty++;refreshCart()},LinearLayout.LayoutParams(dp(48),dp(44)))
+    box.addView(row)
+   }
+   box.addView(tv("Subtotal: "+money(sub),13f))
+   box.addView(tv("Diskon: "+money(discount)+" • Pajak: "+money(tax)+" • Service: "+money(service),12f))
+  }
+  cartText=tv("")
+  totalText?.text="TOTAL  "+money(total)
  }
  private fun pay(method:String){
   if(cart.isEmpty()){toast("Keranjang kosong");return}
