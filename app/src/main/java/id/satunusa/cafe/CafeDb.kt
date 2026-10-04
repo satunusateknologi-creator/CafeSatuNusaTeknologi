@@ -4,7 +4,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-class CafeDb(context: Context) : SQLiteOpenHelper(context, "cafe.db", null, 3) {
+class CafeDb(context: Context) : SQLiteOpenHelper(context, "cafe.db", null, 4) {
  override fun onCreate(db: SQLiteDatabase) {
   db.execSQL("CREATE TABLE IF NOT EXISTS categories(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,active INTEGER DEFAULT 1)")
   db.execSQL("CREATE TABLE IF NOT EXISTS menu(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,price INTEGER,category TEXT,description TEXT DEFAULT '',active INTEGER DEFAULT 1)")
@@ -22,7 +22,16 @@ class CafeDb(context: Context) : SQLiteOpenHelper(context, "cafe.db", null, 3) {
   db.execSQL("CREATE TABLE IF NOT EXISTS sync_queue(id INTEGER PRIMARY KEY AUTOINCREMENT,entity TEXT,entity_id INTEGER,action TEXT,payload TEXT,created_at INTEGER,synced INTEGER DEFAULT 0)")
   seed(db)
  }
- override fun onUpgrade(db: SQLiteDatabase,oldVersion:Int,newVersion:Int) { onCreate(db) }
+ override fun onUpgrade(db: SQLiteDatabase,oldVersion:Int,newVersion:Int) {
+  if(oldVersion<3){
+   db.execSQL("ALTER TABLE orders ADD COLUMN subtotal INTEGER DEFAULT 0")
+   db.execSQL("ALTER TABLE orders ADD COLUMN discount INTEGER DEFAULT 0")
+   db.execSQL("ALTER TABLE orders ADD COLUMN tax INTEGER DEFAULT 0")
+   db.execSQL("ALTER TABLE orders ADD COLUMN service INTEGER DEFAULT 0")
+   db.execSQL("ALTER TABLE orders ADD COLUMN notes TEXT DEFAULT ''")
+  }
+  if(oldVersion<4){ createTables(db) }
+ }
  private fun seed(db:SQLiteDatabase) {
   listOf("Minuman","Makanan","Snack").forEach { db.execSQL("INSERT OR IGNORE INTO categories(name) VALUES(?)",arrayOf(it)) }
   db.execSQL("INSERT INTO menu(name,price,category) VALUES('Es Kopi Susu',18000,'Minuman')")
