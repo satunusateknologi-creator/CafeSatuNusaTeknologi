@@ -13,6 +13,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import android.widget.*
 import java.util.Locale
+import org.json.JSONObject
 
 data class CartItem(val id:Long,val name:String,val price:Long,var qty:Int)
 
@@ -259,21 +260,24 @@ class MainActivity:Activity(){
     AlertDialog.Builder(this).setTitle("Pembelian").setView(box).setPositiveButton("Simpan"){_,_->
      val q=qty.text.toString().toDoubleOrNull()?:0.0
      val unit=price.text.toString().toLongOrNull()?:0L
-     if(q<=0||unit<0){toast("Jumlah/harga tidak valid");return@setPositiveButton}
-     val total=Math.round(q*unit)
-     val d=db.writableDatabase;d.beginTransaction()
-     try{
-      val pv=ContentValues().apply{put("supplier_id",suppliers[si].first);put("total",total);put("status","RECEIVED");put("created_at",System.currentTimeMillis())}
-      val purchaseId=d.insertOrThrow("purchases",null,pv)
-      val iv=ContentValues().apply{put("purchase_id",purchaseId);put("stock_id",stocks[bi].first);put("qty",q);put("unit_price",unit)}
-      d.insertOrThrow("purchase_items",null,iv)
-      d.execSQL("UPDATE stock SET qty=qty+? WHERE id=?",arrayOf(q,stocks[bi].first))
-      d.execSQL("INSERT INTO stock_movements(stock_id,type,qty,reference,created_at) VALUES(?,?,?,?,?)",arrayOf(stocks[bi].first,"PURCHASE",q,"PURCHASE #"+purchaseId,System.currentTimeMillis()))
-      db.logAudit("PURCHASE","PURCHASE",purchaseId,"supplier="+suppliers[si].first+";stock="+stocks[bi].first+";qty="+q+";total="+total)
-      d.setTransactionSuccessful()
-      toast("Pembelian tersimpan dan stok bertambah")
-     }catch(e:Exception){toast("Pembelian gagal: "+(e.message?:"database error"))}finally{d.endTransaction()}
-     supplierManager()
+     if(q<=0||unit<0){
+      toast("Jumlah/harga tidak valid")
+     }else{
+      val total=Math.round(q*unit)
+      val d=db.writableDatabase;d.beginTransaction()
+      try{
+       val pv=ContentValues().apply{put("supplier_id",suppliers[si].first);put("total",total);put("status","RECEIVED");put("created_at",System.currentTimeMillis())}
+       val purchaseId=d.insertOrThrow("purchases",null,pv)
+       val iv=ContentValues().apply{put("purchase_id",purchaseId);put("stock_id",stocks[bi].first);put("qty",q);put("unit_price",unit)}
+       d.insertOrThrow("purchase_items",null,iv)
+       d.execSQL("UPDATE stock SET qty=qty+? WHERE id=?",arrayOf(q,stocks[bi].first))
+       d.execSQL("INSERT INTO stock_movements(stock_id,type,qty,reference,created_at) VALUES(?,?,?,?,?)",arrayOf(stocks[bi].first,"PURCHASE",q,"PURCHASE #"+purchaseId,System.currentTimeMillis()))
+       db.logAudit("PURCHASE","PURCHASE",purchaseId,"supplier="+suppliers[si].first+";stock="+stocks[bi].first+";qty="+q+";total="+total)
+       d.setTransactionSuccessful()
+       toast("Pembelian tersimpan dan stok bertambah")
+      }catch(e:Exception){toast("Pembelian gagal: "+(e.message?:"database error"))}finally{d.endTransaction()}
+      supplierManager()
+     }
     }.setNegativeButton("Batal",null).show()
    }.show()
   }.show()
