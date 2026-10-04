@@ -4,59 +4,89 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-class CafeDb(context: Context) : SQLiteOpenHelper(context, "cafe.db", null, 4) {
- override fun onCreate(db: SQLiteDatabase) {
+class CafeDb(context: Context) : SQLiteOpenHelper(context, "cafe.db", null, 5) {
+ override fun onCreate(db: SQLiteDatabase) { createTables(db); seed(db) }
+ override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+  createTables(db)
+  if(oldVersion<3){
+   addColumnIfMissing(db,"orders","subtotal","INTEGER DEFAULT 0")
+   addColumnIfMissing(db,"orders","discount","INTEGER DEFAULT 0")
+   addColumnIfMissing(db,"orders","tax","INTEGER DEFAULT 0")
+   addColumnIfMissing(db,"orders","service","INTEGER DEFAULT 0")
+   addColumnIfMissing(db,"orders","notes","TEXT DEFAULT ''")
+  }
+  if(oldVersion<5){
+   addColumnIfMissing(db,"orders","sync_status","TEXT DEFAULT 'PENDING'")
+   addColumnIfMissing(db,"orders","refund_amount","INTEGER DEFAULT 0")
+  }
+ }
+ private fun addColumnIfMissing(db:SQLiteDatabase,table:String,column:String,definition:String){
+  var found=false
+  db.rawQuery("PRAGMA table_info($table)",null).use{c->while(c.moveToNext())if(c.getString(1).equals(column,true)){found=true;break}}
+  if(!found)db.execSQL("ALTER TABLE $table ADD COLUMN $column $definition")
+ }
+ private fun createTables(db:SQLiteDatabase){
   db.execSQL("CREATE TABLE IF NOT EXISTS categories(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,active INTEGER DEFAULT 1)")
-  db.execSQL("CREATE TABLE IF NOT EXISTS menu(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,price INTEGER,category TEXT,description TEXT DEFAULT '',active INTEGER DEFAULT 1)")
+  db.execSQL("CREATE TABLE IF NOT EXISTS menu(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,price INTEGER NOT NULL DEFAULT 0,category TEXT,description TEXT DEFAULT '',active INTEGER DEFAULT 1)")
   db.execSQL("CREATE TABLE IF NOT EXISTS menu_variants(id INTEGER PRIMARY KEY AUTOINCREMENT,menu_id INTEGER,name TEXT,price_delta INTEGER DEFAULT 0,active INTEGER DEFAULT 1)")
   db.execSQL("CREATE TABLE IF NOT EXISTS modifiers(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,price INTEGER DEFAULT 0,active INTEGER DEFAULT 1)")
-  db.execSQL("CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY AUTOINCREMENT,subtotal INTEGER,total INTEGER,payment TEXT,status TEXT,table_no TEXT,discount INTEGER DEFAULT 0,tax INTEGER DEFAULT 0,service INTEGER DEFAULT 0,notes TEXT DEFAULT '',created_at INTEGER)")
+  db.execSQL("CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY AUTOINCREMENT,subtotal INTEGER NOT NULL DEFAULT 0,total INTEGER NOT NULL DEFAULT 0,payment TEXT,status TEXT,table_no TEXT,discount INTEGER DEFAULT 0,tax INTEGER DEFAULT 0,service INTEGER DEFAULT 0,notes TEXT DEFAULT '',created_at INTEGER,sync_status TEXT DEFAULT 'PENDING',refund_amount INTEGER DEFAULT 0)")
   db.execSQL("CREATE TABLE IF NOT EXISTS order_items(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER,menu_id INTEGER,menu_name TEXT,qty INTEGER,price INTEGER,note TEXT DEFAULT '')")
   db.execSQL("CREATE TABLE IF NOT EXISTS expenses(id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT,amount INTEGER,category TEXT DEFAULT 'Operasional',created_at INTEGER)")
-  db.execSQL("CREATE TABLE IF NOT EXISTS stock(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,qty REAL,unit TEXT,min_qty REAL DEFAULT 0)")
+  db.execSQL("CREATE TABLE IF NOT EXISTS stock(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,qty REAL NOT NULL DEFAULT 0,unit TEXT,min_qty REAL DEFAULT 0)")
   db.execSQL("CREATE TABLE IF NOT EXISTS stock_movements(id INTEGER PRIMARY KEY AUTOINCREMENT,stock_id INTEGER,type TEXT,qty REAL,reference TEXT,created_at INTEGER)")
   db.execSQL("CREATE TABLE IF NOT EXISTS recipes(id INTEGER PRIMARY KEY AUTOINCREMENT,menu_id INTEGER,stock_id INTEGER,qty REAL)")
-  db.execSQL("CREATE TABLE IF NOT EXISTS suppliers(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,phone TEXT,address TEXT)")
-  db.execSQL("CREATE TABLE IF NOT EXISTS customers(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,phone TEXT,points INTEGER DEFAULT 0)")
   db.execSQL("CREATE TABLE IF NOT EXISTS suppliers(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,phone TEXT,address TEXT,active INTEGER DEFAULT 1)")
   db.execSQL("CREATE TABLE IF NOT EXISTS purchases(id INTEGER PRIMARY KEY AUTOINCREMENT,supplier_id INTEGER,total INTEGER,status TEXT,created_at INTEGER)")
   db.execSQL("CREATE TABLE IF NOT EXISTS purchase_items(id INTEGER PRIMARY KEY AUTOINCREMENT,purchase_id INTEGER,stock_id INTEGER,qty REAL,unit_price INTEGER)")
   db.execSQL("CREATE TABLE IF NOT EXISTS refunds(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER,amount INTEGER,reason TEXT,created_at INTEGER)")
   db.execSQL("CREATE TABLE IF NOT EXISTS employees(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,phone TEXT,role TEXT,active INTEGER DEFAULT 1)")
   db.execSQL("CREATE TABLE IF NOT EXISTS shifts(id INTEGER PRIMARY KEY AUTOINCREMENT,employee_id INTEGER,opening_cash INTEGER,closing_cash INTEGER DEFAULT 0,status TEXT,opened_at INTEGER,closed_at INTEGER)")
+  db.execSQL("CREATE TABLE IF NOT EXISTS customers(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,phone TEXT,points INTEGER DEFAULT 0)")
   db.execSQL("CREATE TABLE IF NOT EXISTS app_settings(key TEXT PRIMARY KEY,value TEXT)")
   db.execSQL("CREATE TABLE IF NOT EXISTS sync_queue(id INTEGER PRIMARY KEY AUTOINCREMENT,entity TEXT,entity_id INTEGER,action TEXT,payload TEXT,created_at INTEGER,synced INTEGER DEFAULT 0)")
-  seed(db)
+  db.execSQL("CREATE TABLE IF NOT EXISTS audit_log(id INTEGER PRIMARY KEY AUTOINCREMENT,action TEXT,entity TEXT,entity_id INTEGER,detail TEXT,created_at INTEGER)")
  }
- override fun onUpgrade(db: SQLiteDatabase,oldVersion:Int,newVersion:Int) {
-  if(oldVersion<3){
-   db.execSQL("ALTER TABLE orders ADD COLUMN subtotal INTEGER DEFAULT 0")
-   db.execSQL("ALTER TABLE orders ADD COLUMN discount INTEGER DEFAULT 0")
-   db.execSQL("ALTER TABLE orders ADD COLUMN tax INTEGER DEFAULT 0")
-   db.execSQL("ALTER TABLE orders ADD COLUMN service INTEGER DEFAULT 0")
-   db.execSQL("ALTER TABLE orders ADD COLUMN notes TEXT DEFAULT ''")
+ private fun seed(db:SQLiteDatabase){
+  listOf("Minuman","Makanan","Snack").forEach{db.execSQL("INSERT OR IGNORE INTO categories(name) VALUES(?)",arrayOf(it))}
+  if(count(db,"menu")==0L){
+   db.execSQL("INSERT INTO menu(name,price,category) VALUES('Es Kopi Susu',18000,'Minuman')")
+   db.execSQL("INSERT INTO menu(name,price,category) VALUES('Americano',15000,'Minuman')")
+   db.execSQL("INSERT INTO menu(name,price,category) VALUES('Nasi Goreng',25000,'Makanan')")
+   db.execSQL("INSERT INTO menu(name,price,category) VALUES('Mie Goreng',22000,'Makanan')")
+   db.execSQL("INSERT INTO menu(name,price,category) VALUES('Kentang Goreng',18000,'Snack')")
   }
-  if(oldVersion<4){ createTables(db) }
- }
- private fun seed(db:SQLiteDatabase) {
-  listOf("Minuman","Makanan","Snack").forEach { db.execSQL("INSERT OR IGNORE INTO categories(name) VALUES(?)",arrayOf(it)) }
-  db.execSQL("INSERT INTO menu(name,price,category) VALUES('Es Kopi Susu',18000,'Minuman')")
-  db.execSQL("INSERT INTO menu(name,price,category) VALUES('Americano',15000,'Minuman')")
-  db.execSQL("INSERT INTO menu(name,price,category) VALUES('Nasi Goreng',25000,'Makanan')")
-  db.execSQL("INSERT INTO menu(name,price,category) VALUES('Mie Goreng',22000,'Makanan')")
-  db.execSQL("INSERT INTO menu(name,price,category) VALUES('Kentang Goreng',18000,'Snack')")
-  db.execSQL("INSERT INTO stock(name,qty,unit,min_qty) VALUES('Kopi',1000,'gram',100)")
-  db.execSQL("INSERT INTO stock(name,qty,unit,min_qty) VALUES('Susu',10000,'ml',1000)")
-  db.execSQL("INSERT INTO stock(name,qty,unit,min_qty) VALUES('Gula',5000,'gram',500)")
-  db.execSQL("INSERT INTO stock(name,qty,unit,min_qty) VALUES('Beras',10000,'gram',1000)")
+  if(count(db,"stock")==0L){
+   db.execSQL("INSERT INTO stock(name,qty,unit,min_qty) VALUES('Kopi',1000,'gram',100)")
+   db.execSQL("INSERT INTO stock(name,qty,unit,min_qty) VALUES('Susu',10000,'ml',1000)")
+   db.execSQL("INSERT INTO stock(name,qty,unit,min_qty) VALUES('Gula',5000,'gram',500)")
+   db.execSQL("INSERT INTO stock(name,qty,unit,min_qty) VALUES('Beras',10000,'gram',1000)")
+  }
   db.execSQL("INSERT OR IGNORE INTO app_settings(key,value) VALUES('tax_percent','0')")
   db.execSQL("INSERT OR IGNORE INTO app_settings(key,value) VALUES('service_percent','0')")
  }
+ private fun count(db:SQLiteDatabase,table:String):Long=db.rawQuery("SELECT COUNT(*) FROM $table",null).use{if(it.moveToFirst())it.getLong(0)else 0L}
  fun updateStatus(id:Long,status:String){writableDatabase.execSQL("UPDATE orders SET status=? WHERE id=?",arrayOf(status,id))}
  fun setting(key:String,defaultValue:String):String{readableDatabase.rawQuery("SELECT value FROM app_settings WHERE key=?",arrayOf(key)).use{if(it.moveToFirst())return it.getString(0)};return defaultValue}
  fun saveSetting(key:String,value:String){writableDatabase.execSQL("INSERT OR REPLACE INTO app_settings(key,value) VALUES(?,?)",arrayOf(key,value))}
  fun addSupplier(name:String,phone:String,address:String){writableDatabase.execSQL("INSERT INTO suppliers(name,phone,address) VALUES(?,?,?)",arrayOf(name,phone,address))}
  fun addModifier(name:String,price:Long){writableDatabase.execSQL("INSERT INTO modifiers(name,price,active) VALUES(?,?,1)",arrayOf(name,price))}
  fun addVariant(menuId:Long,name:String,delta:Long){writableDatabase.execSQL("INSERT INTO menu_variants(menu_id,name,price_delta,active) VALUES(?,?,?,1)",arrayOf(menuId,name,delta))}
- fun refund(orderId:Long,amount:Long,reason:String){writableDatabase.execSQL("INSERT INTO refunds(order_id,amount,reason,created_at) VALUES(?,?,?,?)",arrayOf(orderId,amount,reason,System.currentTimeMillis()));writableDatabase.execSQL("UPDATE orders SET status='REFUND' WHERE id=?",arrayOf(orderId))}
+ fun refund(orderId:Long,amount:Long,reason:String){
+  val d=writableDatabase;d.beginTransaction()
+  try{
+   d.rawQuery("SELECT total,refund_amount,status FROM orders WHERE id=?",arrayOf(orderId.toString())).use{c->
+    if(!c.moveToFirst())throw IllegalArgumentException("Order tidak ditemukan")
+    val total=c.getLong(0);val refunded=c.getLong(1);val status=c.getString(2)
+    if(status=="REFUND")throw IllegalArgumentException("Order sudah refund")
+    val safe=amount.coerceAtMost(total-refunded).coerceAtLeast(0)
+    if(safe<=0)throw IllegalArgumentException("Nominal refund tidak valid")
+    d.execSQL("INSERT INTO refunds(order_id,amount,reason,created_at) VALUES(?,?,?,?)",arrayOf(orderId,safe,reason,System.currentTimeMillis()))
+    d.execSQL("UPDATE orders SET refund_amount=refund_amount+?,status=?,sync_status='PENDING' WHERE id=?",arrayOf(safe,if(safe>=total)"REFUND" else "PARTIAL_REFUND",orderId))
+    d.execSQL("INSERT INTO audit_log(action,entity,entity_id,detail,created_at) VALUES('REFUND','ORDER',?,?,?)",arrayOf(orderId,"amount=$safe;reason=$reason",System.currentTimeMillis()))
+   }
+   d.setTransactionSuccessful()
+  }finally{d.endTransaction()}
+ }
+ fun logAudit(action:String,entity:String,id:Long,detail:String){writableDatabase.execSQL("INSERT INTO audit_log(action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?)",arrayOf(action,entity,id,detail,System.currentTimeMillis()))}
 }
