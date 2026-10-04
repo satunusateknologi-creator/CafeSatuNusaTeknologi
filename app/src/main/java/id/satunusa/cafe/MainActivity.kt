@@ -112,7 +112,15 @@ class MainActivity:Activity(){
   r.addView(button("Riwayat Semua Order"){orders()});r.addView(button("Kembali"){home()});scroll(r)
  }
  private fun settings(){
-  val r=layout("⚙️ Pengaturan");val tax=EditText(this);tax.hint="Pajak %";tax.setText(db.setting("tax_percent","0"));val service=EditText(this);service.hint="Service charge %";service.setText(db.setting("service_percent","0"));r.addView(tv("Pajak dan service untuk transaksi baru"));r.addView(tax);r.addView(service);r.addView(button("Simpan Pengaturan"){taxPercent=tax.text.toString().toDoubleOrNull()?:0.0;servicePercent=service.text.toString().toDoubleOrNull()?:0.0;db.saveSetting("tax_percent",taxPercent.toString());db.saveSetting("service_percent",servicePercent.toString());toast("Pengaturan tersimpan")});r.addView(button("Tentang Aplikasi"){AlertDialog.Builder(this).setTitle("Cafe Satu Nusa").setMessage("POS Cafe offline-first\nVersi 2.0\nSiap dikembangkan ke PHP Native + MySQL dan sinkronisasi multi-device.").setPositiveButton("OK",null).show()});r.addView(button("Kembali"){home()});scroll(r)
+  val r=layout("⚙️ Pengaturan")
+  val tax=EditText(this);tax.hint="Pajak %";tax.setText(db.setting("tax_percent","0"))
+  val service=EditText(this);service.hint="Service charge %";service.setText(db.setting("service_percent","0"))
+  val server=EditText(this);server.hint="URL server, contoh https://domain.com";server.setText(db.setting("server_url",""))
+  r.addView(tv("Pajak, service dan koneksi server"));r.addView(tax);r.addView(service);r.addView(server)
+  r.addView(button("Simpan Pengaturan"){taxPercent=tax.text.toString().toDoubleOrNull()?:0.0;servicePercent=service.text.toString().toDoubleOrNull()?:0.0;db.saveSetting("tax_percent",taxPercent.toString());db.saveSetting("service_percent",servicePercent.toString());db.saveSetting("server_url",server.text.toString().trim());toast("Pengaturan tersimpan")})
+  r.addView(button("🌐 Tes Koneksi Server"){val url=server.text.toString().trim();if(url.isBlank()){toast("Isi URL server dahulu")}else{Thread{val result=ApiClient(url).get("health");runOnUiThread{toast(if(result.isSuccess)"Server terhubung" else "Server tidak dapat dihubungi")}}.start()}})
+  r.addView(button("Tentang Aplikasi"){AlertDialog.Builder(this).setTitle("Cafe Satu Nusa").setMessage("POS Cafe offline-first\nVersi 2.0\nNative Android + SQLite\nBackend PHP Native + MySQL siap dihubungkan.").setPositiveButton("OK",null).show()})
+  r.addView(button("Kembali"){home()});scroll(r)
  }
  private fun toast(s:String)=Toast.makeText(this,s,Toast.LENGTH_SHORT).show()
 }
