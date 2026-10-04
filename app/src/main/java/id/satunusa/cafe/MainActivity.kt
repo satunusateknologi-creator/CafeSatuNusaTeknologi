@@ -27,12 +27,35 @@ class MainActivity:Activity(){
  private var totalText:TextView?=null
  private val backupRequest=9101
  private val restoreRequest=9102
+ private lateinit var session:SessionManager
  private fun money(v:Long)="Rp "+String.format(Locale.US,"%,d",v).replace(',','.')
  private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
  private fun tv(s:String,size:Float=16f)=TextView(this).apply{text=s;textSize=size;setTextColor(Color.rgb(35,35,35));setPadding(dp(16),dp(10),dp(16),dp(10))}
  private fun button(s:String,fn:()->Unit)=Button(this).apply{text=s;setOnClickListener{fn()}}
  private fun layout(title:String):LinearLayout{val r=LinearLayout(this);r.orientation=LinearLayout.VERTICAL;r.setBackgroundColor(Color.rgb(248,249,250));val h=TextView(this).apply{text=title;textSize=22f;setTextColor(Color.WHITE);setGravity(Gravity.CENTER_VERTICAL);setPadding(dp(18),dp(18),dp(18),dp(18));setBackgroundColor(Color.rgb(24,28,35))};r.addView(h,LinearLayout.LayoutParams(-1,dp(64)));return r}
  private fun scroll(r:LinearLayout){setContentView(ScrollView(this).apply{addView(r)})}
+ private fun login(){
+  val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL
+  val u=EditText(this);u.hint="Username"
+  val p=EditText(this);p.hint="Password";p.inputType=0x81
+  box.addView(tv("Login Server",20f));box.addView(u);box.addView(p)
+  AlertDialog.Builder(this).setTitle("Cafe Satu Nusa").setMessage("Masuk sebagai pengguna server").setView(box).setPositiveButton("Login"){_,_->
+   val url=db.setting("server_url","").trim()
+   if(url.isBlank()){toast("URL server belum diisi");home();return@setPositiveButton}
+   Thread{
+    val body=JSONObject().put("username",u.text.toString().trim()).put("password",p.text.toString()).toString()
+    val result=ApiClient(url).post("login",body)
+    runOnUiThread{
+     if(result.isSuccess){
+      try{
+       val o=JSONObject(result.getOrThrow());val usr=o.getJSONObject("user")
+       session.save(o.getString("token"),usr.getString("name"),usr.getString("role"));toast("Login berhasil");home()
+      }catch(e:Exception){toast("Respons server tidak valid")}
+     }else toast("Login gagal")
+    }
+   }.start()
+  }.setNegativeButton("Mode Offline"){_,_->session.clear();home()}.show()
+ }
  private fun backupDatabase(){
   val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply{
    addCategory(Intent.CATEGORY_OPENABLE);type="application/octet-stream";putExtra(Intent.EXTRA_TITLE,"cafe-satu-nusa-backup.db")
@@ -69,14 +92,30 @@ class MainActivity:Activity(){
    toast("Backup/restore gagal: "+(e.message?:"kesalahan file"))
   }
  }
- override fun onCreate(b:Bundle?){super.onCreate(b);db=CafeDb(this);taxPercent=db.setting("tax_percent","0").toDoubleOrNull()?:0.0;servicePercent=db.setting("service_percent","0").toDoubleOrNull()?:0.0;home()}
+ override fun onCreate(b:Bundle?){
+  super.onCreate(b);session=SessionManager(this);db=CafeDb(this)
+  taxPercent=db.setting("tax_percent","0").toDoubleOrNull()?:0.0
+  servicePercent=db.setting("service_percent","0").toDoubleOrNull()?:0.0
+  if(db.setting("server_url","").isNotBlank()&&!session.loggedIn)login() else home()
+ }
  private fun card(r:LinearLayout,title:String,value:String){val x=LinearLayout(this);x.orientation=LinearLayout.VERTICAL;x.setPadding(dp(8),dp(8),dp(8),dp(8));x.setBackgroundColor(Color.WHITE);x.addView(tv(title,13f));x.addView(tv(value,21f));r.addView(x)}
  private fun home(){
-  val r=layout("☕ Cafe Satu Nusa")
+  val r=layout("☕ Cafe Satu Nusa • "+session.role)
   val sum=db.readableDatabase.rawQuery("SELECT COUNT(*),COALESCE(SUM(total),0) FROM orders WHERE date(created_at/1000,'unixepoch','localtime')=date('now','localtime')",null);var trx=0L;var omzet=0L;if(sum.moveToFirst()){trx=sum.getLong(0);omzet=sum.getLong(1)};sum.close()
   val ex=db.readableDatabase.rawQuery("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE date(created_at/1000,'unixepoch','localtime')=date('now','localtime')",null);var expense=0L;if(ex.moveToFirst())expense=ex.getLong(0);ex.close()
   val stats=LinearLayout(this);stats.orientation=LinearLayout.VERTICAL;stats.setPadding(dp(10),dp(10),dp(10),dp(10));card(stats,"Transaksi Hari Ini",trx.toString());card(stats,"Omzet Hari Ini",money(omzet));card(stats,"Pengeluaran Hari Ini",money(expense));card(stats,"Estimasi Laba",money(omzet-expense));r.addView(stats)
-  r.addView(button("🧾 KASIR / POS"){pos()});r.addView(button("🍳 KITCHEN DISPLAY"){kitchen()});r.addView(button("🪑 MEJA & PESANAN"){orders()});r.addView(button("🍔 MENU & KATEGORI"){menuManager()});r.addView(button("📦 STOK & RESEP"){stockManager()});r.addView(button("👥 PELANGGAN"){customers()});r.addView(button("👨‍💼 KARYAWAN & SHIFT"){employees()});r.addView(button("💸 PENGELUARAN"){expenses()});r.addView(button("📊 LAPORAN & ANALITIK"){reports()});r.addView(button("🛠️ FITUR LANJUTAN"){advancedManager()});r.addView(button("⚙️ PENGATURAN"){settings()});scroll(r)
+  if(session.role in listOf("OWNER","ADMIN","KASIR"))r.addView(button("🧾 KASIR / POS"){pos()})
+  if(session.role in listOf("OWNER","ADMIN","KASIR","KITCHEN"))r.addView(button("🍳 KITCHEN DISPLAY"){kitchen()})
+  if(session.role in listOf("OWNER","ADMIN","KASIR"))r.addView(button("🪑 MEJA & PESANAN"){orders()})
+  if(session.role in listOf("OWNER","ADMIN"))r.addView(button("🍔 MENU & KATEGORI"){menuManager()})
+  if(session.role in listOf("OWNER","ADMIN","KITCHEN"))r.addView(button("📦 STOK & RESEP"){stockManager()})
+  if(session.role in listOf("OWNER","ADMIN","KASIR"))r.addView(button("👥 PELANGGAN"){customers()})
+  if(session.role in listOf("OWNER","ADMIN"))r.addView(button("👨‍💼 KARYAWAN & SHIFT"){employees()})
+  if(session.role in listOf("OWNER","ADMIN"))r.addView(button("💸 PENGELUARAN"){expenses()})
+  if(session.role in listOf("OWNER","ADMIN"))r.addView(button("📊 LAPORAN & ANALITIK"){reports()})
+  if(session.role in listOf("OWNER","ADMIN"))r.addView(button("🛠️ FITUR LANJUTAN"){advancedManager()})
+  if(session.role in listOf("OWNER","ADMIN"))r.addView(button("⚙️ PENGATURAN"){settings()})
+  if(session.loggedIn)r.addView(button("🚪 Logout Server"){session.clear();home()})scroll(r)
  }
  private fun pos(){
   val r=layout("🧾 Kasir / POS");r.addView(button("Meja: $table • Diskon: ${money(discount)}"){chooseTable()})
