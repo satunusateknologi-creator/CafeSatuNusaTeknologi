@@ -28,6 +28,7 @@ class MainActivity:Activity(){
  private var servicePercent=0.0
  private var cartText:TextView?=null
  private var totalText:TextView?=null
+ private var menuArea:LinearLayout?=null
  private val backupRequest=9101
  private val restoreRequest=9102
  private lateinit var session:SessionManager
@@ -146,8 +147,12 @@ class MainActivity:Activity(){
   r.addView(section("Pilih Menu"))
   val cats=mutableListOf("Semua");db.readableDatabase.rawQuery("SELECT name FROM categories WHERE active=1 ORDER BY name",null).use{c0->while(c0.moveToNext())cats.add(c0.getString(0))}
   val catBar=LinearLayout(this);catBar.orientation=LinearLayout.HORIZONTAL
-  cats.forEach{cat->catBar.addView(button(cat){menuForPos(r,if(cat=="Semua")null else cat)},LinearLayout.LayoutParams(0,dp(48),1f))}
-  r.addView(catBar);r.addView(section("Keranjang"))
+  cats.forEach{cat->catBar.addView(button(cat){menuForPos(r,if(cat=="Semua")null else cat)},LinearLayout.LayoutParams(dp(120),dp(48)))}
+  val catScroll=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;addView(catBar)}
+  r.addView(catScroll)
+  menuArea=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
+  r.addView(menuArea)
+  r.addView(section("Keranjang"))
   val cartBox=LinearLayout(this);cartBox.orientation=LinearLayout.VERTICAL;cartBox.setPadding(dp(14),dp(12),dp(14),dp(12));cartBox.background=bg(Color.WHITE,18);cartText=tv("");cartBox.addView(cartText);r.addView(cartBox)
   totalText=TextView(this);totalText!!.textSize=24f;totalText!!.typeface=Typeface.DEFAULT_BOLD;totalText!!.setTextColor(accent);totalText!!.gravity=Gravity.CENTER;r.addView(totalText);addGap(r,6)
   val pay=LinearLayout(this);pay.orientation=LinearLayout.HORIZONTAL;pay.addView(primaryButton("💵 Tunai"){pay("Tunai")},LinearLayout.LayoutParams(0,dp(56),1f));pay.addView(primaryButton("📱 QRIS"){pay("QRIS")},LinearLayout.LayoutParams(0,dp(56),1f));r.addView(pay);addGap(r,6)
@@ -161,7 +166,8 @@ class MainActivity:Activity(){
    val v=button(name+"\n"+money(price)){val old=cart[id];if(old==null)cart[id]=CartItem(id,name,price,1) else old.qty++;refreshCart()}
    val lp=GridLayout.LayoutParams();lp.width=0;lp.height=dp(82);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(dp(4),dp(4),dp(4),dp(4));grid.addView(v,lp)
   }}
-  parent.addView(grid)
+  menuArea?.removeAllViews()
+  menuArea?.addView(grid)
  }
  private fun refreshCart(){
   val lines=cart.values.joinToString("\n"){it.name+" x"+it.qty+" = "+money(it.price*it.qty)}
