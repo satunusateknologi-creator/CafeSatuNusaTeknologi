@@ -49,11 +49,24 @@ class MainActivity:Activity(){
  }
  private fun section(s:String)=TextView(this).apply{text=s;textSize=15f;setTextColor(navy);typeface=Typeface.DEFAULT_BOLD;setPadding(dp(4),dp(18),dp(4),dp(8))}
  private fun addGap(r:LinearLayout,h:Int=8){r.addView(Space(this),LinearLayout.LayoutParams(1,dp(h)))}
+ private fun field(hint:String,number:Boolean=false)=EditText(this).apply{
+  this.hint=hint;setTextSize(15f);setTextColor(ink);setHintTextColor(Color.rgb(100,116,139));setPadding(dp(14),dp(10),dp(14),dp(10));background=bg(Color.WHITE,14)
+  if(number)inputType=2
+ }
+ private fun listCard(title:String,subtitle:String="",status:String?=null):LinearLayout{
+  val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL;box.setPadding(dp(14),dp(12),dp(14),dp(12));box.background=bg(Color.WHITE,16)
+  val head=LinearLayout(this);head.gravity=Gravity.CENTER_VERTICAL
+  val t=TextView(this);t.text=title;t.textSize=16f;t.setTextColor(navy);t.typeface=Typeface.DEFAULT_BOLD;head.addView(t,LinearLayout.LayoutParams(0,LinearLayout.LayoutParams.WRAP_CONTENT,1f))
+  if(status!=null){val s=TextView(this);s.text=status;s.textSize=11f;s.setTextColor(accent);s.typeface=Typeface.DEFAULT_BOLD;s.setPadding(dp(9),dp(5),dp(9),dp(5));s.background=bg(Color.rgb(226,245,242),12);head.addView(s)}
+  box.addView(head)
+  if(subtitle.isNotBlank()){val st=TextView(this);st.text=subtitle;st.textSize=13f;st.setTextColor(Color.rgb(71,85,105));st.setPadding(0,dp(5),0,0);box.addView(st)}
+  return box
+ }
  private fun scroll(r:LinearLayout){setContentView(ScrollView(this).apply{isFillViewport=true;addView(r)})}
  private fun login(){
   val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL
-  val u=EditText(this);u.hint="Username"
-  val p=EditText(this);p.hint="Password";p.inputType=0x81
+  val u=field("Username")
+  val p=field("Password");p.inputType=0x81
   box.addView(tv("Login Server",20f));box.addView(u);box.addView(p)
   AlertDialog.Builder(this).setTitle("Cafe Satu Nusa").setMessage("Masuk sebagai pengguna server").setView(box).setPositiveButton("Login"){_,_->
    val url=db.setting("server_url","").trim()
@@ -229,12 +242,12 @@ class MainActivity:Activity(){
   AlertDialog.Builder(this).setTitle("Struk #"+id).setMessage(lines.toString()).setPositiveButton("Bagikan"){_,_->val send=Intent(Intent.ACTION_SEND);send.type="text/plain";send.putExtra(Intent.EXTRA_TEXT,lines.toString());startActivity(Intent.createChooser(send,"Bagikan Struk"))}.setNegativeButton("Selesai"){_,_->home()}.show()
  }
  private fun discountDialog(){
-  val e=EditText(this);e.hint="Nominal diskon";e.inputType=2
+  val e=field("Nominal diskon",true)
   AlertDialog.Builder(this).setTitle("Diskon Transaksi").setMessage("Masukkan nominal diskon dalam rupiah").setView(e).setPositiveButton("Terapkan"){_,_->discount=(e.text.toString().toLongOrNull()?:0).coerceAtLeast(0);refreshCart()}.setNegativeButton("Hapus Diskon"){_,_->discount=0;refreshCart()}.show()
  }
  private fun chooseTable(){val r=layout("🪑 Pilih Meja");r.addView(button("Takeaway"){table="Takeaway";pos()});for(i in 1..12)r.addView(button("Meja $i"){table="Meja $i";pos()});r.addView(button("Kembali"){pos()});scroll(r)}
  private fun orders(){
-  val r=layout("🪑 Pesanan & Meja");r.addView(tv("30 pesanan terakhir",18f));db.readableDatabase.rawQuery("SELECT id,table_no,total,payment,status FROM orders ORDER BY id DESC LIMIT 30",null).use{c->while(c.moveToNext()){val id=c.getLong(0);val status=c.getString(4);r.addView(tv("#$id • "+c.getString(1)+" • "+money(c.getLong(2))+" • "+c.getString(3)+" • $status"));if(status!="SELESAI")r.addView(button("Ubah status"){statusDialog(id)})}};r.addView(button("Kembali"){home()});scroll(r)
+  val r=layout("🪑 Pesanan & Meja");r.addView(tv("30 pesanan terakhir",14f));db.readableDatabase.rawQuery("SELECT id,table_no,total,payment,status FROM orders ORDER BY id DESC LIMIT 30",null).use{c->while(c.moveToNext()){val id=c.getLong(0);val status=c.getString(4);val row=listCard("#$id • "+c.getString(1),money(c.getLong(2))+" • "+c.getString(3),status);r.addView(row,LinearLayout.LayoutParams(-1,LinearLayout.LayoutParams.WRAP_CONTENT).apply{setMargins(0,dp(5),0,dp(5))});if(status!="SELESAI")r.addView(button("Ubah status"){statusDialog(id)})}};r.addView(button("Kembali"){home()});scroll(r)
  }
  private fun statusDialog(id:Long){val items=arrayOf("BARU","DIPROSES","SIAP","SELESAI","BATAL");AlertDialog.Builder(this).setTitle("Status Order #$id").setItems(items){_,which->db.updateStatus(id,items[which]);orders()}.show()}
  private fun kitchen(){
@@ -244,7 +257,7 @@ class MainActivity:Activity(){
   val r=layout("🍔 Menu & Kategori");r.addView(button("＋ Tambah Menu"){menuForm()});db.readableDatabase.rawQuery("SELECT id,name,price,category,active FROM menu ORDER BY category,name",null).use{c->while(c.moveToNext()){val id=c.getLong(0);r.addView(tv(c.getString(3)+" • "+c.getString(1)+" • "+money(c.getLong(2)),16f));r.addView(button("Edit / Nonaktifkan"){menuEdit(id)})}};r.addView(button("＋ Tambah Kategori"){categoryForm()});r.addView(button("Kembali"){home()});scroll(r)
  }
  private fun menuForm(){
-  val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL;val n=EditText(this);n.hint="Nama menu";val p=EditText(this);p.hint="Harga";p.inputType=2;val c=EditText(this);c.hint="Kategori";box.addView(n);box.addView(p);box.addView(c)
+  val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL;addGap(box,4);val n=field("Nama menu");val p=field("Harga",true);val c=field("Kategori");box.addView(n);addGap(box,6);box.addView(p);addGap(box,6);box.addView(c)
   AlertDialog.Builder(this).setTitle("Tambah Menu").setView(box).setPositiveButton("Simpan"){_,_->val v=ContentValues().apply{put("name",n.text.toString());put("price",p.text.toString().toLongOrNull()?:0);put("category",c.text.toString());put("active",1)};db.writableDatabase.insert("menu",null,v);menuManager()}.setNegativeButton("Batal",null).show()
  }
  private fun menuEdit(id:Long){AlertDialog.Builder(this).setTitle("Menu").setItems(arrayOf("Nonaktifkan","Hapus")){_,w->if(w==0)db.writableDatabase.execSQL("UPDATE menu SET active=0 WHERE id=?",arrayOf(id)) else db.writableDatabase.delete("menu","id=?",arrayOf(id.toString()));menuManager()}.show()}
@@ -255,18 +268,18 @@ class MainActivity:Activity(){
   r.addView(button("⚙️ Atur Resep / BOM"){recipeForm()});r.addView(button("Kembali"){home()});scroll(r)
  }
  private fun stockForm(){
-  val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL;val n=EditText(this);n.hint="Nama bahan";val q=EditText(this);q.hint="Saldo awal";q.inputType=2;val u=EditText(this);u.hint="Satuan";val m=EditText(this);m.hint="Minimum";m.inputType=2;box.addView(n);box.addView(q);box.addView(u);box.addView(m)
+  val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL;val n=field("Nama bahan");val q=field("Saldo awal",true);val u=field("Satuan");val m=field("Minimum",true);box.addView(n);addGap(box,6);box.addView(q);addGap(box,6);box.addView(u);addGap(box,6);box.addView(m)
   AlertDialog.Builder(this).setTitle("Tambah Bahan").setView(box).setPositiveButton("Simpan"){_,_->val v=ContentValues().apply{put("name",n.text.toString());put("qty",q.text.toString().toDoubleOrNull()?:0.0);put("unit",u.text.toString());put("min_qty",m.text.toString().toDoubleOrNull()?:0.0)};db.writableDatabase.insert("stock",null,v);stockManager()}.setNegativeButton("Batal",null).show()
  }
  private fun stockAdjustDialog(incoming:Boolean){
   val names=mutableListOf<Pair<Long,String>>();db.readableDatabase.rawQuery("SELECT id,name FROM stock ORDER BY name",null).use{c->while(c.moveToNext())names.add(c.getLong(0) to c.getString(1))};if(names.isEmpty()){toast("Belum ada bahan");return}
-  AlertDialog.Builder(this).setTitle(if(incoming)"Pilih bahan masuk" else "Pilih bahan keluar").setItems(names.map{it.second}.toTypedArray()){_,w->val q=EditText(this);q.hint="Jumlah";q.inputType=2;AlertDialog.Builder(this).setTitle(names[w].second).setView(q).setPositiveButton("Simpan"){_,_->val amount=q.text.toString().toDoubleOrNull()?:0.0;val delta=if(incoming)amount else -amount;db.writableDatabase.execSQL("UPDATE stock SET qty=qty+? WHERE id=?",arrayOf(delta,names[w].first));db.writableDatabase.execSQL("INSERT INTO stock_movements(stock_id,type,qty,reference,created_at) VALUES(?,?,?,?,?)",arrayOf(names[w].first,if(incoming)"IN" else "OUT",delta,"MANUAL",System.currentTimeMillis()));stockManager()}.show()}.show()
+  AlertDialog.Builder(this).setTitle(if(incoming)"Pilih bahan masuk" else "Pilih bahan keluar").setItems(names.map{it.second}.toTypedArray()){_,w->val q=field("Jumlah",true);AlertDialog.Builder(this).setTitle(names[w].second).setView(q).setPositiveButton("Simpan"){_,_->val amount=q.text.toString().toDoubleOrNull()?:0.0;val delta=if(incoming)amount else -amount;db.writableDatabase.execSQL("UPDATE stock SET qty=qty+? WHERE id=?",arrayOf(delta,names[w].first));db.writableDatabase.execSQL("INSERT INTO stock_movements(stock_id,type,qty,reference,created_at) VALUES(?,?,?,?,?)",arrayOf(names[w].first,if(incoming)"IN" else "OUT",delta,"MANUAL",System.currentTimeMillis()));stockManager()}.show()}.show()
  }
  private fun recipeForm(){
   val menus=mutableListOf<Pair<Long,String>>();db.readableDatabase.rawQuery("SELECT id,name FROM menu WHERE active=1 ORDER BY name",null).use{c->while(c.moveToNext())menus.add(c.getLong(0) to c.getString(1))}
   val stocks=mutableListOf<Pair<Long,String>>();db.readableDatabase.rawQuery("SELECT id,name FROM stock ORDER BY name",null).use{c->while(c.moveToNext())stocks.add(c.getLong(0) to c.getString(1))}
   if(menus.isEmpty()||stocks.isEmpty()){toast("Menu dan bahan harus tersedia");return}
-  AlertDialog.Builder(this).setTitle("Pilih Menu").setItems(menus.map{it.second}.toTypedArray()){_,mi->AlertDialog.Builder(this).setTitle("Pilih Bahan").setItems(stocks.map{it.second}.toTypedArray()){_,si->val q=EditText(this);q.hint="Jumlah per 1 porsi";q.inputType=2;AlertDialog.Builder(this).setTitle("Resep").setView(q).setPositiveButton("Simpan"){_,_->db.writableDatabase.delete("recipes","menu_id=? AND stock_id=?",arrayOf(menus[mi].first.toString(),stocks[si].first.toString()));db.writableDatabase.execSQL("INSERT INTO recipes(menu_id,stock_id,qty) VALUES(?,?,?)",arrayOf(menus[mi].first,stocks[si].first,q.text.toString().toDoubleOrNull()?:0.0));toast("Resep disimpan")}.show()}.show()}.show()
+  AlertDialog.Builder(this).setTitle("Pilih Menu").setItems(menus.map{it.second}.toTypedArray()){_,mi->AlertDialog.Builder(this).setTitle("Pilih Bahan").setItems(stocks.map{it.second}.toTypedArray()){_,si->val q=field("Jumlah per 1 porsi",true);AlertDialog.Builder(this).setTitle("Resep").setView(q).setPositiveButton("Simpan"){_,_->db.writableDatabase.delete("recipes","menu_id=? AND stock_id=?",arrayOf(menus[mi].first.toString(),stocks[si].first.toString()));db.writableDatabase.execSQL("INSERT INTO recipes(menu_id,stock_id,qty) VALUES(?,?,?)",arrayOf(menus[mi].first,stocks[si].first,q.text.toString().toDoubleOrNull()?:0.0));toast("Resep disimpan")}.show()}.show()}.show()
  }
  private fun advancedManager(){
   val r=layout("🛠️ Fitur Lanjutan")
@@ -281,7 +294,7 @@ class MainActivity:Activity(){
  private fun supplierManager(){
   val r=layout("🏭 Supplier")
   r.addView(button("🛒 Catat Pembelian / Stok Masuk"){purchaseForm()})
-  r.addView(button("＋ Tambah Supplier"){val b=LinearLayout(this);b.orientation=LinearLayout.VERTICAL;val n=EditText(this);n.hint="Nama";val p=EditText(this);p.hint="Telepon";val a=EditText(this);a.hint="Alamat";b.addView(n);b.addView(p);b.addView(a);AlertDialog.Builder(this).setTitle("Supplier").setView(b).setPositiveButton("Simpan"){_,_->db.addSupplier(n.text.toString(),p.text.toString(),a.text.toString());supplierManager()}.show()});db.readableDatabase.rawQuery("SELECT name,phone,address FROM suppliers WHERE active=1 ORDER BY name",null).use{c->while(c.moveToNext())r.addView(tv(c.getString(0)+" • "+(c.getString(1)?:"")+" • "+(c.getString(2)?:""))) };r.addView(button("Kembali"){advancedManager()});scroll(r)
+  r.addView(button("＋ Tambah Supplier"){val b=LinearLayout(this);b.orientation=LinearLayout.VERTICAL;val n=field("Nama");val p=field("Telepon");val a=field("Alamat");b.addView(n);b.addView(p);b.addView(a);AlertDialog.Builder(this).setTitle("Supplier").setView(b).setPositiveButton("Simpan"){_,_->db.addSupplier(n.text.toString(),p.text.toString(),a.text.toString());supplierManager()}.show()});db.readableDatabase.rawQuery("SELECT name,phone,address FROM suppliers WHERE active=1 ORDER BY name",null).use{c->while(c.moveToNext())r.addView(tv(c.getString(0)+" • "+(c.getString(1)?:"")+" • "+(c.getString(2)?:""))) };r.addView(button("Kembali"){advancedManager()});scroll(r)
  }
  private fun purchaseForm(){
   val suppliers=mutableListOf<Pair<Long,String>>()
@@ -293,8 +306,8 @@ class MainActivity:Activity(){
   AlertDialog.Builder(this).setTitle("Pilih Supplier").setItems(suppliers.map{it.second}.toTypedArray()){_,si->
    AlertDialog.Builder(this).setTitle("Pilih Bahan").setItems(stocks.map{it.second}.toTypedArray()){_,bi->
     val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL
-    val qty=EditText(this);qty.hint="Jumlah";qty.inputType=2
-    val price=EditText(this);price.hint="Harga satuan";price.inputType=2
+    val qty=field("Jumlah",true)
+    val price=field("Harga satuan",true)
     box.addView(qty);box.addView(price)
     AlertDialog.Builder(this).setTitle("Pembelian").setView(box).setPositiveButton("Simpan"){_,_->
      val q=qty.text.toString().toDoubleOrNull()?:0.0
@@ -322,11 +335,11 @@ class MainActivity:Activity(){
   }.show()
  }
  private fun refundDialog(){
-  val e=EditText(this);e.hint="ID Order";e.inputType=2
+  val e=field("ID Order",true)
   AlertDialog.Builder(this).setTitle("Refund").setMessage("Refund akan menandai order sebagai REFUND.").setView(e).setPositiveButton("Lanjut"){_,_->val id=e.text.toString().toLongOrNull()?:0;refundReason(id)}.setNegativeButton("Batal",null).show()
  }
  private fun refundReason(id:Long){
-  val b=EditText(this);b.hint="Alasan refund"
+  val b=field("Alasan refund")
   AlertDialog.Builder(this).setTitle("Alasan Refund").setView(b)
    .setPositiveButton("Proses"){_,_->
     val q=db.readableDatabase.rawQuery("SELECT total,refund_amount,status FROM orders WHERE id=?",arrayOf(id.toString()))
@@ -352,15 +365,15 @@ class MainActivity:Activity(){
   }.start()
  }
  private fun customers(){
-  val r=layout("👥 Pelanggan");r.addView(button("＋ Tambah Pelanggan"){val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL;val n=EditText(this);n.hint="Nama";val p=EditText(this);p.hint="No. HP";box.addView(n);box.addView(p);AlertDialog.Builder(this).setTitle("Pelanggan").setView(box).setPositiveButton("Simpan"){_,_->val v=ContentValues().apply{put("name",n.text.toString());put("phone",p.text.toString())};db.writableDatabase.insert("customers",null,v);customers()}.show()});db.readableDatabase.rawQuery("SELECT name,phone,points FROM customers ORDER BY name",null).use{c->while(c.moveToNext())r.addView(tv(c.getString(0)+" • "+c.getString(1)+" • "+c.getInt(2)+" poin"))};r.addView(button("Kembali"){home()});scroll(r)
+  val r=layout("👥 Pelanggan");r.addView(button("＋ Tambah Pelanggan"){val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL;val n=field("Nama");val p=field("No. HP");box.addView(n);addGap(box,6);box.addView(p);AlertDialog.Builder(this).setTitle("Pelanggan").setView(box).setPositiveButton("Simpan"){_,_->val v=ContentValues().apply{put("name",n.text.toString());put("phone",p.text.toString())};db.writableDatabase.insert("customers",null,v);customers()}.show()});db.readableDatabase.rawQuery("SELECT name,phone,points FROM customers ORDER BY name",null).use{c->while(c.moveToNext())r.addView(tv(c.getString(0)+" • "+c.getString(1)+" • "+c.getInt(2)+" poin"))};r.addView(button("Kembali"){home()});scroll(r)
  }
  private fun employees(){
-  val r=layout("👨‍💼 Karyawan & Shift");r.addView(button("＋ Tambah Karyawan"){val n=EditText(this);n.hint="Nama";AlertDialog.Builder(this).setTitle("Karyawan").setView(n).setPositiveButton("Simpan"){_,_->val v=ContentValues().apply{put("name",n.text.toString());put("role","KASIR");put("active",1)};db.writableDatabase.insert("employees",null,v);employees()}.show()});r.addView(button("▶ Buka Shift Kasir"){shiftOpen()});r.addView(button("⏹ Tutup Shift"){shiftClose()});db.readableDatabase.rawQuery("SELECT name,role,active FROM employees ORDER BY name",null).use{c->while(c.moveToNext())r.addView(tv(c.getString(0)+" • "+c.getString(1)+" • "+if(c.getInt(2)==1)"Aktif" else "Nonaktif"))};r.addView(button("Kembali"){home()});scroll(r)
+  val r=layout("👨‍💼 Karyawan & Shift");r.addView(button("＋ Tambah Karyawan"){val n=field("Nama");AlertDialog.Builder(this).setTitle("Karyawan").setView(n).setPositiveButton("Simpan"){_,_->val v=ContentValues().apply{put("name",n.text.toString());put("role","KASIR");put("active",1)};db.writableDatabase.insert("employees",null,v);employees()}.show()});r.addView(button("▶ Buka Shift Kasir"){shiftOpen()});r.addView(button("⏹ Tutup Shift"){shiftClose()});db.readableDatabase.rawQuery("SELECT name,role,active FROM employees ORDER BY name",null).use{c->while(c.moveToNext())r.addView(tv(c.getString(0)+" • "+c.getString(1)+" • "+if(c.getInt(2)==1)"Aktif" else "Nonaktif"))};r.addView(button("Kembali"){home()});scroll(r)
  }
- private fun shiftOpen(){val e=EditText(this);e.hint="Modal kas awal";e.inputType=2;AlertDialog.Builder(this).setTitle("Buka Shift").setView(e).setPositiveButton("Buka"){_,_->val v=ContentValues().apply{put("employee_id",1);put("opening_cash",e.text.toString().toLongOrNull()?:0);put("status","OPEN");put("opened_at",System.currentTimeMillis())};db.writableDatabase.insert("shifts",null,v);toast("Shift dibuka")}.show()}
- private fun shiftClose(){val e=EditText(this);e.hint="Kas akhir";e.inputType=2;AlertDialog.Builder(this).setTitle("Tutup Shift").setView(e).setPositiveButton("Tutup"){_,_->val v=ContentValues().apply{put("closing_cash",e.text.toString().toLongOrNull()?:0);put("status","CLOSED");put("closed_at",System.currentTimeMillis())};val id=db.readableDatabase.rawQuery("SELECT id FROM shifts WHERE status='OPEN' ORDER BY id DESC LIMIT 1",null);if(id.moveToFirst()){val sid=id.getLong(0);db.writableDatabase.update("shifts",v,"id=?",arrayOf(sid.toString()))};id.close();toast("Shift ditutup")}.show()}
+ private fun shiftOpen(){val e=field("Modal kas awal",true);AlertDialog.Builder(this).setTitle("Buka Shift").setView(e).setPositiveButton("Buka"){_,_->val v=ContentValues().apply{put("employee_id",1);put("opening_cash",e.text.toString().toLongOrNull()?:0);put("status","OPEN");put("opened_at",System.currentTimeMillis())};db.writableDatabase.insert("shifts",null,v);toast("Shift dibuka")}.show()}
+ private fun shiftClose(){val e=field("Kas akhir",true);AlertDialog.Builder(this).setTitle("Tutup Shift").setView(e).setPositiveButton("Tutup"){_,_->val v=ContentValues().apply{put("closing_cash",e.text.toString().toLongOrNull()?:0);put("status","CLOSED");put("closed_at",System.currentTimeMillis())};val id=db.readableDatabase.rawQuery("SELECT id FROM shifts WHERE status='OPEN' ORDER BY id DESC LIMIT 1",null);if(id.moveToFirst()){val sid=id.getLong(0);db.writableDatabase.update("shifts",v,"id=?",arrayOf(sid.toString()))};id.close();toast("Shift ditutup")}.show()}
  private fun expenses(){
-  val r=layout("💸 Pengeluaran");r.addView(button("＋ Catat Pengeluaran"){val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL;val t=EditText(this);t.hint="Keterangan";val a=EditText(this);a.hint="Nominal";a.inputType=2;val c=EditText(this);c.hint="Kategori";box.addView(t);box.addView(a);box.addView(c);AlertDialog.Builder(this).setTitle("Pengeluaran").setView(box).setPositiveButton("Simpan"){_,_->val v=ContentValues().apply{put("title",t.text.toString());put("amount",a.text.toString().toLongOrNull()?:0);put("category",c.text.toString().ifBlank{"Operasional"});put("created_at",System.currentTimeMillis())};db.writableDatabase.insert("expenses",null,v);expenses()}.show()});db.readableDatabase.rawQuery("SELECT title,amount,category FROM expenses ORDER BY id DESC LIMIT 30",null).use{c->while(c.moveToNext())r.addView(tv(c.getString(0)+" • "+c.getString(2)+" • "+money(c.getLong(1))))};r.addView(button("Kembali"){home()});scroll(r)
+  val r=layout("💸 Pengeluaran");r.addView(button("＋ Catat Pengeluaran"){val box=LinearLayout(this);box.orientation=LinearLayout.VERTICAL;val t=field("Keterangan");val a=field("Nominal",true);val c=field("Kategori");box.addView(t);addGap(box,6);box.addView(a);addGap(box,6);box.addView(c);AlertDialog.Builder(this).setTitle("Pengeluaran").setView(box).setPositiveButton("Simpan"){_,_->val v=ContentValues().apply{put("title",t.text.toString());put("amount",a.text.toString().toLongOrNull()?:0);put("category",c.text.toString().ifBlank{"Operasional"});put("created_at",System.currentTimeMillis())};db.writableDatabase.insert("expenses",null,v);expenses()}.show()});db.readableDatabase.rawQuery("SELECT title,amount,category FROM expenses ORDER BY id DESC LIMIT 30",null).use{c->while(c.moveToNext())r.addView(tv(c.getString(0)+" • "+c.getString(2)+" • "+money(c.getLong(1))))};r.addView(button("Kembali"){home()});scroll(r)
  }
  private fun reports(){
   val r=layout("📊 Laporan & Analitik");val q=db.readableDatabase.rawQuery("SELECT COUNT(*),COALESCE(SUM(total),0),COALESCE(SUM(discount),0),COALESCE(SUM(tax),0),COALESCE(SUM(service),0) FROM orders WHERE date(created_at/1000,'unixepoch','localtime')=date('now','localtime')",null);if(q.moveToFirst())r.addView(tv("Hari ini\nTransaksi: "+q.getLong(0)+"\nOmzet: "+money(q.getLong(1))+"\nDiskon: "+money(q.getLong(2))+"\nPajak: "+money(q.getLong(3))+"\nService: "+money(q.getLong(4)),18f));q.close()
@@ -370,9 +383,9 @@ class MainActivity:Activity(){
  }
  private fun settings(){
   val r=layout("⚙️ Pengaturan")
-  val tax=EditText(this);tax.hint="Pajak %";tax.setText(db.setting("tax_percent","0"))
-  val service=EditText(this);service.hint="Service charge %";service.setText(db.setting("service_percent","0"))
-  val server=EditText(this);server.hint="URL server, contoh https://domain.com";server.setText(db.setting("server_url",""))
+  val tax=field("Pajak %",true);tax.setText(db.setting("tax_percent","0"))
+  val service=field("Service charge %",true);service.setText(db.setting("service_percent","0"))
+  val server=field("URL server, contoh https://domain.com");server.setText(db.setting("server_url",""))
   r.addView(tv("Pajak, service dan koneksi server"));r.addView(tax);r.addView(service);r.addView(server)
   r.addView(button("Simpan Pengaturan"){taxPercent=tax.text.toString().toDoubleOrNull()?:0.0;servicePercent=service.text.toString().toDoubleOrNull()?:0.0;db.saveSetting("tax_percent",taxPercent.toString());db.saveSetting("service_percent",servicePercent.toString());db.saveSetting("server_url",server.text.toString().trim());toast("Pengaturan tersimpan")})
   r.addView(button("🌐 Tes Koneksi Server"){val url=server.text.toString().trim();if(url.isBlank()){toast("Isi URL server dahulu")}else{Thread{val result=ApiClient(url).get("health");runOnUiThread{toast(if(result.isSuccess)"Server terhubung" else "Server tidak dapat dihubungi")}}.start()}})
