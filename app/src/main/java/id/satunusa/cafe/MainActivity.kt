@@ -26,7 +26,7 @@ class MainActivity:Activity(){
  private fun button(s:String,fn:()->Unit)=Button(this).apply{text=s;setOnClickListener{fn()}}
  private fun layout(title:String):LinearLayout{val r=LinearLayout(this);r.orientation=LinearLayout.VERTICAL;r.setBackgroundColor(Color.rgb(248,249,250));val h=TextView(this).apply{text=title;textSize=22f;setTextColor(Color.WHITE);setGravity(Gravity.CENTER_VERTICAL);setPadding(dp(18),dp(18),dp(18),dp(18));setBackgroundColor(Color.rgb(24,28,35))};r.addView(h,LinearLayout.LayoutParams(-1,dp(64)));return r}
  private fun scroll(r:LinearLayout){setContentView(ScrollView(this).apply{addView(r)})}
- override fun onCreate(b:Bundle?){super.onCreate(b);db=CafeDb(this);home()}
+ override fun onCreate(b:Bundle?){super.onCreate(b);db=CafeDb(this);taxPercent=db.setting("tax_percent","0").toDoubleOrNull()?:0.0;servicePercent=db.setting("service_percent","0").toDoubleOrNull()?:0.0;home()}
  private fun card(r:LinearLayout,title:String,value:String){val x=LinearLayout(this);x.orientation=LinearLayout.VERTICAL;x.setPadding(dp(8),dp(8),dp(8),dp(8));x.setBackgroundColor(Color.WHITE);x.addView(tv(title,13f));x.addView(tv(value,21f));r.addView(x)}
  private fun home(){
   val r=layout("☕ Cafe Satu Nusa")
@@ -71,6 +71,10 @@ class MainActivity:Activity(){
   lines.append("TOTAL: ").append(money(total)).append("\n")
   lines.append("Terima kasih.\n")
   AlertDialog.Builder(this).setTitle("Struk #"+id).setMessage(lines.toString()).setPositiveButton("Bagikan"){_,_->val send=Intent(Intent.ACTION_SEND);send.type="text/plain";send.putExtra(Intent.EXTRA_TEXT,lines.toString());startActivity(Intent.createChooser(send,"Bagikan Struk"))}.setNegativeButton("Selesai"){_,_->home()}.show()
+ }
+ private fun discountDialog(){
+  val e=EditText(this);e.hint="Nominal diskon";e.inputType=2
+  AlertDialog.Builder(this).setTitle("Diskon Transaksi").setMessage("Masukkan nominal diskon dalam rupiah").setView(e).setPositiveButton("Terapkan"){_,_->discount=(e.text.toString().toLongOrNull()?:0).coerceAtLeast(0);refreshCart()}.setNegativeButton("Hapus Diskon"){_,_->discount=0;refreshCart()}.show()
  }
  private fun chooseTable(){val r=layout("🪑 Pilih Meja");r.addView(button("Takeaway"){table="Takeaway";pos()});for(i in 1..12)r.addView(button("Meja $i"){table="Meja $i";pos()});r.addView(button("Kembali"){pos()});scroll(r)}
  private fun orders(){
